@@ -140,6 +140,21 @@ a.haveanapp-byline__by:hover, a.haveanapp-byline__by:focus-visible { text-decora
   .panel { height: 100px; } .card { flex-basis: 132px; }
   .pace button { padding: 0 16px; font-size: 13px; }
 }
+@media (min-width: 900px) and (min-height: 620px) {
+  .hud-top { max-width: 1500px; gap: var(--s3); }
+  .plate { padding: 10px 16px 12px; border-radius: 12px; }
+  .plate small { font-size: 12px; letter-spacing: .16em; }
+  .plate strong { font-size: 30px; } .plate strong i { font-size: 15px; }
+  .bar { height: 12px; margin-top: 14px; border-radius: 6px; }
+  .dock { max-width: 1040px; grid-template-columns: auto 1fr; column-gap: var(--s4); row-gap: 6px; }
+  .dock .panel { grid-column: 1 / -1; height: 116px; padding: var(--s2); }
+  .dock .tabs [role="tab"] { padding: 0 22px; font-size: 15px; }
+  .pace button { padding: 0 18px; font-size: 14px; } .recall { padding: 0 28px; font-size: 15px; }
+  #panel-build { gap: var(--s2); } .card { padding: 10px 14px; } .card b { font-size: 16px; } .card small { font-size: 13px; } .card span { font-size: 15px; }
+  .memo { top: calc(var(--safe-t) + 124px); width: 340px; font-size: 15px; }
+  .stepper b, .staff-info b { font-size: 15px; } .stepper small, .staff-info small { font-size: 13px; } #roster li { font-size: 14px; }
+  .inspector b { font-size: 17px; } .inspector small { font-size: 14px; }
+}
 @media (max-height: 560px) and (min-width: 700px) { .panel { height: 84px; } }
 
 /* ---------- stamp, modals ---------- */

@@ -134,7 +134,7 @@
       R.onEvent(S, e);
       switch (e.type) {
         case 'memo': if (e.tone === 'idle' && G.memoQ.length) break; if (e.tone === 'loss' || e.tone === 'warn') G.memoUntil = 0; G.memoQ.push(e); break;
-        case 'build': audio.play('coin'); setTimeout(() => audio.play('thud'), C.FEEL.build_drop_ms); flash('p-bank', 'pulse'); if (!save.seenHint) { save.seenHint = true; store(); } if (e.b.type === 'hatchery' && !e.upgrade) $('tab-staff').classList.add('nudge'); if (G.selected) showInspector(); G.rosterDirty = true; break;
+        case 'build': audio.play('coin'); setTimeout(() => audio.play('thud'), C.FEEL.build_drop_ms); flash('p-bank', 'pulse'); if (!save.seenHint) { save.seenHint = true; store(); G.memoUntil = 0; } if (e.b.type === 'hatchery' && !e.upgrade) $('tab-staff').classList.add('nudge'); if (G.selected) showInspector(); G.rosterDirty = true; break;
         case 'deny': audio.play('deny'); if (e.what === 'recall') flash('recall', 'deny'); else { flash('p-bank', 'deny'); const c = cards[e.what]; if (c && c.isConnected) { c.classList.remove('deny'); void c.offsetWidth; c.classList.add('deny'); } } break;
         case 'deliver': audio.play('plip', 0.09); break;
         case 'telegraph': if (e.kind === 'swat' || e.kind === 'scratch') { audio.play('warn'); $('recall').classList.add('alarm'); } break;
@@ -237,8 +237,8 @@
     get bank() { return G.S ? Math.floor(G.S.bank) : 0; }, get workers() { return G.S ? G.S.workers.length : 0; }, get buildings() { return G.S ? G.S.buildings.length : 0; }, get casualties() { return G.S ? G.S.lost.length : 0; },
     get irritation() { return G.S ? G.S.irritation : 0; }, get quotasMet() { return G.S ? G.S.quotasMet : 0; }, get sleepLeft() { return G.S ? G.S.shiftLen - G.S.sleepLost - G.S.time : 0; }, get fx() { return fxName(G.S); }, get best() { return save.best ? save.best.score : 0; },
     debug: {
-      preset(name) { if (G.S && name === 'mid') { preset(G.S, false); G.rosterDirty = true; G.memoQ = []; } },
-      trigger(what) { const S = G.S; if (!S || S.state !== 'playing') return; if (what === 'swat') { S.hev = null; S.siteBlocked = 0; S.covered = 0; S.recallT = 0; for (let i = 0; i < 90; i++) sim.step(S, STEP); S.hev = null; S.events.length = 0; sim.startEvent(S, 'swat'); } else if (what === 'quota') { S.extracted = Math.max(S.extracted, S.quotas[Math.min(3, S.quarter)]); } else if (what === 'wake') sim.wake(S); else if (['scratch', 'roll', 'blanket', 'stir'].includes(what)) { S.hev = null; sim.startEvent(S, what); } drainEvents(); },
+      preset(name) { if (G.S && name === 'mid') { preset(G.S, false); G.rosterDirty = true; G.memoQ = [{ text: C.MEMOS.idle[2], tone: 'idle' }]; G.memoUntil = 0; G.uiAt = 0; updateHud(0, performance.now() / 1000); } },
+      trigger(what) { const S = G.S; if (!S || S.state !== 'playing') return; if (what === 'swat') { S.hev = null; S.eventCd = 1e9; for (let i = 0; i < 300 && !(i > 30 && S.biting >= 3); i++) { S.siteBlocked = 0; S.covered = 0; S.recallT = 0; S.irritation = Math.min(S.irritation, 20); sim.step(S, STEP); drainEvents(); } S.eventCd = 6; sim.startEvent(S, 'swat'); } else if (what === 'quota') { S.extracted = Math.max(S.extracted, S.quotas[Math.min(3, S.quarter)]); } else if (what === 'wake') sim.wake(S); else if (['scratch', 'roll', 'blanket', 'stir'].includes(what)) { S.hev = null; sim.startEvent(S, what); } drainEvents(); },
     },
   };
 

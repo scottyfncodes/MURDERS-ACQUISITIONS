@@ -25,6 +25,7 @@
         const at = e.at; e.dead.forEach((w, i) => fx.parts.push({ kind: 'hat', x: at[0], y: at[1] + 0.2, z: at[2] + (i % 3) * 0.4, vx: (i % 2 ? 1 : -1) * (0.6 + i * 0.25), vz: 3 + (i % 3), t: 0, life: 1.6 }));
         if (e.dead.length) fx.labels.push({ text: `${e.dead.length} LOST`, color: pal.accent, x: at[0], y: at[1], z: at[2] + 1.6, t: 0, life: 2.2 });
         else if (e.nearMiss) fx.labels.push({ text: 'NEAR MISS: 0 LOST', color: pal.primary, x: at[0], y: at[1], z: at[2] + 1.6, t: 0, life: 2.2 });
+        else fx.labels.push({ text: 'NOBODY HOME', color: pal.text, x: at[0], y: at[1], z: at[2] + 1.6, t: 0, life: 1.8 });
       }
     } else if (e.type === 'quotaMet') fx.flare = 1;
     else if (e.type === 'wake') fx.labels.push({ text: '6:30 AM', color: pal.accent, x: 11.0, y: 0.5, z: 3.4, t: 0, life: 2.6 });

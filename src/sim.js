@@ -112,7 +112,7 @@
     S.recallT = FEEL.recall_hold_s; S.recallCd = FEEL.recall_cooldown_s * S.mods.recallCd;
     retreat(S); S.events.push({ type: 'recall' }); return true;
   }
-  function retreat(S) { for (const w of S.workers) if (w.job === 'extract' && (w.st === 'bite' || w.st === 'toSkin')) { w.st = 'retreat'; fly(w, waitPoint(S, w), 0.6); } }
+  function retreat(S) { for (const w of S.workers) if (w.job === 'extract' && (w.st === 'bite' || w.st === 'toSkin')) { w.st = 'retreat'; fly(w, waitPoint(S, w), 0.45); } }
   function waitPoint(S, w) { const r = sitePos(S).rig; return [r[0] + 0.6 + w.jit[0] * 1.6, r[1] + 1.2 + w.jit[1] * 1.2, 1.0 + w.jit[2] * 0.9]; }
 
   function startEvent(S, kind) {
@@ -125,7 +125,7 @@
   function impact(S) {
     const e = S.hev, kind = e.kind; e.hit = true;
     if (kind === 'swat' || kind === 'scratch') {
-      const onSkin = S.workers.filter((w) => w.job === 'extract' && w.st === 'bite');
+      const onSkin = S.workers.filter((w) => w.job === 'extract' && (w.st === 'bite' || (w.st === 'toSkin' && w.t / w.dur > 0.5)));
       const rate = (kind === 'swat' ? ECON.swatKill : ECON.scratchKill) * S.mods.kill;
       let k = Math.round(onSkin.length * rate); if (onSkin.length && k === 0 && kind === 'swat') k = 1;
       const dead = onSkin.sort(() => S.rand() - 0.5).slice(0, k);
@@ -180,9 +180,9 @@
       w.t += dt;
       if (w.st === 'wait') {
         if (!w.from || w.t > w.dur) { if (!w.to || dist(w.pos, waitPoint(S, w)) > 0.3) fly(w, waitPoint(S, w), 0.7); }
-        if (open && onWay < d.slots && S.taken < S.supply && w.t > 0.25) { onWay++; w.st = 'toSkin'; fly(w, [site.skin[0] + w.jit[0] * 0.5, site.skin[1] + 0.02, site.skin[2] + (w.jit[2] - 0.5) * 1.5], FEEL.fly_seconds); }
+        if (open && onWay < d.slots && S.taken < S.supply && w.t > 0.2 + w.jit[2] * 0.9) { onWay++; w.st = 'toSkin'; fly(w, [site.skin[0] + w.jit[0] * 0.5, site.skin[1] + 0.02, site.skin[2] + (w.jit[2] - 0.5) * 1.5], FEEL.fly_seconds); }
       } else if (w.st === 'toSkin') {
-        if (w.t >= w.dur) { w.st = 'bite'; w.t = 0; w.dur = biteDur; w.from = null; }
+        if (w.t >= w.dur) { w.st = 'bite'; w.t = 0; w.dur = biteDur * (0.8 + S.rand() * 0.4); w.from = null; }
       } else if (w.st === 'bite') {
         biting++;
         if (w.t >= w.dur) { const load = Math.min(ECON.loadMl * S.mods.extract, S.supply - S.taken); S.taken += load; w.carry = load; w.st = 'toTank'; fly(w, [tc[0] + w.jit[0] * 0.5, tc[1] + w.jit[1] * 0.5, 2.6], FEEL.fly_seconds); }
