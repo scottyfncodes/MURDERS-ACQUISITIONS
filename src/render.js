@@ -187,6 +187,9 @@
           winR(x + 2.0, y + 0.25, y + 1.45, dz + 0.55, dz + h - 0.4, refining ? shade(pal.glow, 0.82) : shade(pal.metalDark, 1.2));
           if (refining) glow(P(x + 1, y + 1.7, 0.9), s * (2 + fx.flare), pal.glow, 0.28 + fx.flare * 0.4);
           box(x - 0.1, y - 0.1, dz + h, 2.2, 1.9, 0.14, pal.primary);
+          // output conveyor: crates of product roll out while the refinery runs, and stop when it does
+          box(x - 0.35, y + 1.78, dz, 2.7, 0.42, 0.2, pal.metalDark, [1.6, 1.05, 0.8]);
+          for (let i = 0; i < 3; i++) { const q = ((refining && !fx.reduced ? t * 0.45 : 0) + i / 3 + b.id * 0.13) % 1; box(x - 0.3 + q * 2.3, y + 1.83, dz + 0.2, 0.32, 0.32, 0.28, pal.blood, [1.15, 0.9, 0.7]); }
           for (let k = 0; k < lv; k++) { const ch = cyl(x + 1.55 - k * 0.5, y + 0.5, dz + h + 0.14, 0.24, 1.1 + k * 0.2, pal.metal); if (refining && !fx.reduced) for (let i = 0; i < 3; i++) { const q = (t * 0.3 + i / 3 + k * 0.2) % 1; ctx.globalAlpha = (1 - q) * 0.45; ell([ch.b[0] + Math.sin(q * 5 + i) * s * 0.25, ch.b[1] - s * 0.2 - q * s * 1.8], s * (0.22 + q * 0.4), s * (0.18 + q * 0.3), pal.steam); } ctx.globalAlpha = 1; }
         } else if (b.type === 'hatchery') {
           box(x, y, dz, 2.0, 1.7, 0.8, pal.metal); winL(x + 0.2, x + 1.8, y + 1.7, dz + 0.26, dz + 0.56, pal.glow); glow(P(x + 1, y + 1.7, 0.4), s * 1.3, pal.glow, 0.24);
