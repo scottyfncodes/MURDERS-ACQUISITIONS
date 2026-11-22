@@ -41,6 +41,72 @@
    "role": "sfx",
    "sha256": "e4027a026c1c84983dd1906fbabec38e77b3e8715efa243a0e6d658341cbd3e1",
    "task": "audio.sfx.powerup"
+  },
+  "assets/brand/logo.svg": {
+   "format": "svg",
+   "role": "logo",
+   "sha256": "8f23a0af4cc908bce71c3413561f605cbad43af7377354e43ecc65b7c9f87313",
+   "task": "foundation.identity"
+  },
+  "assets/brand/palette.json": {
+   "format": "json",
+   "role": "palette",
+   "sha256": "2459eed28d811d2d8053cd1ab5236f04d90e78d1d1d5adfd2ae7eb6360afc8b3",
+   "task": "foundation.identity"
+  },
+  "assets/icons/apple-touch-icon.png": {
+   "format": "png",
+   "role": "icon",
+   "sha256": "d036e76cbc360ad80d98124cc6354db24d213053ad61c7e93962ff011c8e8bf3",
+   "task": "icon.derivatives"
+  },
+  "assets/icons/favicon-16.png": {
+   "format": "png",
+   "role": "favicon",
+   "sha256": "16f7d17adf03ffe704eec2c12956192d98ace2cb06323f4100cd727da6a49699",
+   "task": "icon.derivatives"
+  },
+  "assets/icons/favicon-32.png": {
+   "format": "png",
+   "role": "favicon",
+   "sha256": "300b22e0cf26f90e2b986ba24c1bfc508f70a05718350b2ab29bcf9f8c1281f1",
+   "task": "icon.derivatives"
+  },
+  "assets/icons/favicon.ico": {
+   "format": "ico",
+   "role": "favicon",
+   "sha256": "b2e3f9228044cdd5d3b6bdec15c9cf3a0cd780aa0c07bd32f678a3dd6442bb91",
+   "task": "icon.derivatives"
+  },
+  "assets/icons/icon-1024.png": {
+   "format": "png",
+   "role": "icon_master",
+   "sha256": "034cb6c096e0f7321cf1d727354e35b9a550703e3931a43e22d8cc599ee2529e",
+   "task": "icon.derivatives"
+  },
+  "assets/icons/icon-192.png": {
+   "format": "png",
+   "role": "icon",
+   "sha256": "4b1f108abd82673d5ab2067fd8472ec9ec021809571e77ed1cb2b29f49379aa2",
+   "task": "icon.derivatives"
+  },
+  "assets/icons/icon-512.png": {
+   "format": "png",
+   "role": "icon",
+   "sha256": "fbb4217a2fefb7ce3ec18702fb2a5d527d69a2c4af095e25aa26fbe2a9621309",
+   "task": "icon.derivatives"
+  },
+  "assets/icons/icon-maskable-512.png": {
+   "format": "png",
+   "role": "icon",
+   "sha256": "4287fa2dd47bcdccb8e69dfa0edc1c9f985c1e7266171d3dcc7cae052d70bf6a",
+   "task": "icon.derivatives"
+  },
+  "assets/icons/icon.svg": {
+   "format": "svg",
+   "role": "icon",
+   "sha256": "6b59f2d13370243618416fb92e08564c2d9c2f30dc91ccdb27d47a66ebd59917",
+   "task": "icon.derivatives"
   }
  },
  "owner": "integration",

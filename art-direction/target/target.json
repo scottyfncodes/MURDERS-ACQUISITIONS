@@ -1,0 +1,33 @@
+{
+ "style": "isometric",
+ "look_name": "Isometric Diorama",
+ "style_how": "picked",
+ "liked_in_others": "Person replied \"A\" (Night Shift, whose only icon is the plant manager). No notes on the others.",
+ "approved_by": "a person (production_approve)",
+ "icon": "manager",
+ "icon_idea": "The plant manager, half-lidded and in his tie, against the factory's amber light.",
+ "design": "a",
+ "name": "Night Shift",
+ "idea": "The plant glows amber under a dark bed at 3 AM, like the only lit building in a sleeping town.",
+ "palette": {
+  "background": "#141b33",
+  "surface": "#222b52",
+  "primary": "#ffc65c",
+  "accent": "#ee4455",
+  "text": "#eef0fa"
+ },
+ "type": {
+  "display": "Alfa Slab One",
+  "body": "Archivo"
+ },
+ "composition": "Centred stack: slab-serif sign at the top, the whole bed diorama in the middle where the eye lands on the lit windows, one wide Clock In button at the thumb. Play: stat plates across the top, build cards along the bottom.",
+ "flavor": "Cosy and a little sad: the night shift nobody thanked.",
+ "files": {
+  "phone": "art-direction/target/phone.png",
+  "browser": "art-direction/target/browser.png",
+  "desktop": "art-direction/target/desktop.png",
+  "play": "art-direction/target/play.png",
+  "icon": "art-direction/target/icon.png"
+ },
+ "saved": "2026-11-22T22:15:46+00:00"
+}

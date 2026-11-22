@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 260" width="960" height="260">
+<rect width="960" height="260" fill="#141b33"/>
+<g transform="translate(30 30) scale(0.195)">
+<circle cx="512" cy="512" r="500" fill="#ffc65c"/>
+<ellipse cx="238" cy="566" rx="258" ry="96" transform="rotate(-43 238 566)" fill="#eef0fa" fill-opacity=".9"/>
+<ellipse cx="786" cy="566" rx="258" ry="96" transform="rotate(43 786 566)" fill="#eef0fa" fill-opacity=".9"/>
+<path d="M398 256Q360 128 276 116M626 256Q664 128 748 116" fill="none" stroke="#141833" stroke-width="22" stroke-linecap="round"/>
+<circle cx="512" cy="470" r="256" fill="#141833"/>
+<circle cx="408" cy="452" r="92" fill="#fff"/><circle cx="616" cy="452" r="92" fill="#fff"/>
+<rect x="292" y="336" width="440" height="104" fill="#141833"/>
+<circle cx="408" cy="482" r="38" fill="#141833"/><circle cx="616" cy="482" r="38" fill="#141833"/>
+<path d="M468 760H556L542 828 580 990Q512 1016 444 990L482 828Z" fill="#ee4455"/>
+</g>
+<text x="262" y="128" font-family="'Alfa Slab One', 'Rockwell Extra Bold', Rockwell, serif" font-size="104" fill="#ffc65c" letter-spacing="1">MURDERS</text>
+<text x="264" y="196" font-family="'Alfa Slab One', 'Rockwell Extra Bold', Rockwell, serif" font-size="53" fill="#ffc65c">&amp; ACQUISITIONS</text>
+<text x="266" y="232" font-family="Archivo, Arial, sans-serif" font-style="italic" font-size="22" fill="#eef0fa">We’re all just trying to make a living.</text>
+</svg>
