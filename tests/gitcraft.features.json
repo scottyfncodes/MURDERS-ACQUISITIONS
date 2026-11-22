@@ -1,6 +1,118 @@
 {
- "_how": "Optional for games (PLAYCRAFT plays the game). Steps: {press: 'Space'}, {hold: 'ArrowRight', ms: 500}, {tap: [x, y]}, {wait: 300}, {assert: 'window.game.state === \"play\"', name: '...'}.",
+ "_how": "Steps: {press: 'Space'}, {hold: 'ArrowRight', ms: 500}, {tap: [x, y]}, {wait: 300}, {assert: '<js>', name: '...'}.",
  "features": [
-  {"name": "starts from the title screen", "requirement": "start screen", "steps": [{"press": "Space"}, {"wait": 200}, {"assert": "window.game.state === 'play'", "name": "Space starts the game"}]}
+  {
+   "name": "clocks in from the title screen",
+   "requirement": "start screen \u2192 play",
+   "steps": [
+    {
+     "assert": "window.__game.state === 'title'",
+     "name": "starts on the title"
+    },
+    {
+     "press": "Enter"
+    },
+    {
+     "wait": 300
+    },
+    {
+     "assert": "window.__game.state === 'playing'",
+     "name": "Enter clocks in"
+    }
+   ]
+  },
+  {
+   "name": "builds within the first seconds",
+   "requirement": "build and upgrade factory buildings",
+   "steps": [
+    {
+     "press": "Enter"
+    },
+    {
+     "wait": 300
+    },
+    {
+     "press": "1"
+    },
+    {
+     "wait": 400
+    },
+    {
+     "assert": "window.__game.buildings === 4",
+     "name": "a storage tank is built from the starting bank"
+    }
+   ]
+  },
+  {
+   "name": "the crew extracts and the bank grows",
+   "requirement": "harvest \u2192 process loop",
+   "steps": [
+    {
+     "press": "Enter"
+    },
+    {
+     "wait": 9000
+    },
+    {
+     "assert": "window.__game.score > 0 && window.__game.bank > 50",
+     "name": "blood is extracted and refined into the bank"
+    }
+   ]
+  },
+  {
+   "name": "pause stops the clock",
+   "requirement": "pause",
+   "steps": [
+    {
+     "press": "Enter"
+    },
+    {
+     "wait": 500
+    },
+    {
+     "press": "p"
+    },
+    {
+     "wait": 200
+    },
+    {
+     "assert": "window.__game.paused === true",
+     "name": "P pauses"
+    },
+    {
+     "press": "Escape"
+    },
+    {
+     "wait": 200
+    },
+    {
+     "assert": "window.__game.paused === false",
+     "name": "Escape resumes"
+    }
+   ]
+  },
+  {
+   "name": "the shift ends in a performance review",
+   "requirement": "round ends with a performance report",
+   "steps": [
+    {
+     "press": "Enter"
+    },
+    {
+     "wait": 300
+    },
+    {
+     "assert": "(window.__game.debug.trigger('wake'), true)",
+     "name": "alarm"
+    },
+    {
+     "wait": 4000
+    },
+    {
+     "assert": "window.__game.state === 'over' && !document.getElementById('review').hidden",
+     "name": "review is shown"
+    }
+   ]
+  }
  ]
 }

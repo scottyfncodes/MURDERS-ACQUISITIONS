@@ -1,0 +1,160 @@
+{
+ "version": 1,
+ "product": "game",
+ "viewports": [
+  "phone",
+  "desktop"
+ ],
+ "shots": [
+  {
+   "id": "title",
+   "name": "Title, fully loaded",
+   "kind": "title",
+   "steps": [],
+   "wait_for": {
+    "selector": "#title[data-ready]",
+    "timeout_ms": 8000
+   }
+  },
+  {
+   "id": "first-seconds",
+   "name": "First seconds of a shift",
+   "kind": "play",
+   "steps": [
+    {
+     "selector": "#clock-in"
+    }
+   ],
+   "wait_for": {
+    "js": "window.__game.state === 'playing' && window.__game.time > 2",
+    "timeout_ms": 8000
+   }
+  },
+  {
+   "id": "mid-play",
+   "name": "Mid-shift, plant running",
+   "kind": "play",
+   "steps": [
+    {
+     "selector": "#clock-in"
+    },
+    {
+     "eval": "window.__game.debug.preset('mid')"
+    }
+   ],
+   "wait_for": {
+    "js": "window.__game.state === 'playing' && window.__game.workers >= 20 && window.__game.buildings >= 5",
+    "timeout_ms": 8000
+   }
+  },
+  {
+   "id": "the-swat",
+   "name": "The swat lands",
+   "kind": "moment",
+   "moment": "the-swat",
+   "steps": [
+    {
+     "selector": "#clock-in"
+    },
+    {
+     "eval": "window.__game.debug.preset('mid')"
+    },
+    {
+     "eval": "window.__game.debug.trigger('swat')"
+    }
+   ],
+   "sequence": {
+    "before": {
+     "js": "window.__game.fx === 'swat-warning'"
+    },
+    "after_ms": 900
+   },
+   "wait_for": {
+    "js": "window.__game.fx === 'swat-impact'",
+    "timeout_ms": 8000
+   }
+  },
+  {
+   "id": "quota-met",
+   "name": "Quota met, policy pick",
+   "kind": "moment",
+   "moment": "quota-met",
+   "steps": [
+    {
+     "selector": "#clock-in"
+    },
+    {
+     "eval": "window.__game.debug.preset('mid')"
+    },
+    {
+     "eval": "window.__game.debug.trigger('quota')"
+    }
+   ],
+   "sequence": {
+    "after_ms": 1400
+   },
+   "wait_for": {
+    "selector": "#quota-stamp[data-show]",
+    "timeout_ms": 8000
+   }
+  },
+  {
+   "id": "wake-up",
+   "name": "The alarm: the sleeper wakes",
+   "kind": "fail",
+   "moment": "wake-up",
+   "steps": [
+    {
+     "selector": "#clock-in"
+    },
+    {
+     "eval": "window.__game.debug.preset('mid')"
+    },
+    {
+     "eval": "window.__game.debug.trigger('wake')"
+    }
+   ],
+   "sequence": {
+    "after_ms": 1200
+   },
+   "wait_for": {
+    "js": "window.__game.state === 'waking'",
+    "timeout_ms": 8000
+   }
+  },
+  {
+   "id": "review",
+   "name": "Performance review",
+   "kind": "results",
+   "steps": [
+    {
+     "selector": "#clock-in"
+    },
+    {
+     "eval": "window.__game.debug.preset('mid')"
+    },
+    {
+     "eval": "window.__game.debug.trigger('wake')"
+    }
+   ],
+   "wait_for": {
+    "selector": "#review[data-ready]",
+    "timeout_ms": 15000
+   }
+  },
+  {
+   "id": "handbook",
+   "name": "Employee handbook",
+   "kind": "screen",
+   "steps": [
+    {
+     "selector": "#open-handbook"
+    }
+   ],
+   "wait_for": {
+    "selector": "#handbook[data-open]",
+    "timeout_ms": 8000
+   }
+  }
+ ]
+}
