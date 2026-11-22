@@ -31,4 +31,10 @@ There is no build step and there are no dependencies.
 Audio in `assets/audio` is Ogg; `media/compat` holds MP3 copies for browsers that cannot decode Ogg.
 Fonts are Alfa Slab One and Archivo (SIL Open Font License, see `fonts/NOTICE.md`).
 
+## Deployment
+
+Hosted on Vercel through its GitHub integration, with no build step (the repository root is the site).
+`main` is the production branch: every merge to `main` deploys to production. Every other branch and
+pull request gets its own preview deployment.
+
 by HaveAnApp
