@@ -1,0 +1,48 @@
+{
+ "assets": {
+  "assets/audio/click.ogg": {
+   "format": "ogg",
+   "role": "sfx",
+   "sha256": "b95e56478eeeded7c25f1a4242116c4e8b800bd38eefc80e3f35d0fa2d2e5e74",
+   "task": "audio.sfx.click"
+  },
+  "assets/audio/coin.ogg": {
+   "format": "ogg",
+   "role": "sfx",
+   "sha256": "771610d678258e74507a085d1c7dad56148a047441884e6c24e6609af2bdcfe9",
+   "task": "audio.sfx.coin"
+  },
+  "assets/audio/footstep.ogg": {
+   "format": "ogg",
+   "role": "sfx",
+   "sha256": "8f9b8a5073bd27c119574f8fda107d8b22928759ea4524cf18bba95b936e755e",
+   "task": "audio.sfx.footstep"
+  },
+  "assets/audio/hit.ogg": {
+   "format": "ogg",
+   "role": "sfx",
+   "sha256": "17546e884a5640b2b6a6d9ffc890877a583b6232e5556d2a86cef2d34d9fb2cb",
+   "task": "audio.sfx.hit"
+  },
+  "assets/audio/magic.ogg": {
+   "format": "ogg",
+   "role": "sfx",
+   "sha256": "0386329b8c4618b59201c69a71f88dc6d17b10319c1f53d6ad21478f0e262204",
+   "task": "audio.sfx.magic"
+  },
+  "assets/audio/music.ogg": {
+   "format": "ogg",
+   "role": "music",
+   "sha256": "049bb73159471ddf826f32cb22f28fcac2625ee1b84b084a3565c3e062491298",
+   "task": "audio.music"
+  },
+  "assets/audio/powerup.ogg": {
+   "format": "ogg",
+   "role": "sfx",
+   "sha256": "e4027a026c1c84983dd1906fbabec38e77b3e8715efa243a0e6d658341cbd3e1",
+   "task": "audio.sfx.powerup"
+  }
+ },
+ "owner": "integration",
+ "schema": "gitcraft-assets/1"
+}
