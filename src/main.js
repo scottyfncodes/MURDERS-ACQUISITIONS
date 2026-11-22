@@ -242,6 +242,17 @@
     },
   };
 
+  // the identity: palette tokens and the letterhead logo come from assets/brand
+  fetch('assets/brand/palette.json').then((r) => (r.ok ? r.json() : null)).then((p) => {
+    if (!p) return; const ok = (v) => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v), root = document.documentElement.style;
+    for (const [k, v] of [['background', '--bg'], ['surface', '--surface'], ['primary', '--primary'], ['accent', '--accent'], ['text', '--text']]) if (ok(p[k])) root.setProperty(v, p[k]);
+  }).catch(() => {});
+  fetch('assets/brand/logo.svg').then((r) => (r.ok ? r.text() : '')).then((txt) => {
+    const svg = new DOMParser().parseFromString(txt, 'image/svg+xml').documentElement; if (!svg || svg.nodeName !== 'svg') return;
+    svg.querySelectorAll('script, foreignObject').forEach((n) => n.remove()); svg.removeAttribute('width'); svg.removeAttribute('height');
+    document.querySelectorAll('.letterhead').forEach((el) => el.append(document.importNode(svg, true)));
+  }).catch(() => {});
+
   buildCards(); applyMute(); titleStatus();
   const ready = () => { $('title').setAttribute('data-ready', ''); requestAnimationFrame(frame); };
   if (document.fonts && document.fonts.ready) Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 1500))]).then(ready); else ready();

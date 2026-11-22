@@ -1,6 +1,6 @@
 {
  "name": "MURDERS & ACQUISITIONS",
- "short_name": "M&A",
+ "short_name": "MURDERS & AC",
  "description": "MURDERS & ACQUISITIONS by HaveAnApp",
  "start_url": ".",
  "display": "standalone",
@@ -24,6 +24,12 @@
    "sizes": "512x512",
    "type": "image/png",
    "purpose": "maskable"
+  },
+  {
+   "src": "assets/icons/icon-1024.png",
+   "sizes": "1024x1024",
+   "type": "image/png",
+   "purpose": "any"
   }
  ]
 }

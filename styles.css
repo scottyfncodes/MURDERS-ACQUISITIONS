@@ -153,6 +153,7 @@ a.haveanapp-byline__by:hover, a.haveanapp-byline__by:focus-visible { text-decora
 .sheet.narrow { max-width: 380px; }
 @keyframes rise { from { transform: translateY(24px); } }
 .sheet h2 { font-family: var(--display); font-weight: 400; font-size: var(--t-xl); line-height: 1.05; color: var(--primary); }
+.letterhead { height: 56px; margin: -8px 0 0 -6px; } .letterhead:empty { display: none; } .letterhead svg { height: 100%; width: auto; display: block; }
 .sheet .sub { color: var(--muted); font-size: var(--t-s); margin-top: calc(var(--s2) * -1); }
 .sheet .haveanapp-byline { text-align: center; }
 .policy-cards { display: grid; gap: var(--s2); }

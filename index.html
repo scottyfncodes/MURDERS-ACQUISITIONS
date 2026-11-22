@@ -14,6 +14,9 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#141b33">
   <meta name="apple-mobile-web-app-title" content="MURDERS &amp; ACQUISITIONS">
+  <meta property="og:title" content="MURDERS &amp; ACQUISITIONS">
+  <meta property="og:description" content="We’re all just trying to make a living.">
+  <meta property="og:image" content="assets/icons/icon-1024.png">
   <link rel="preload" href="fonts/alfa-slab-one-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/archivo-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="styles.css">
@@ -94,15 +97,16 @@
   </div>
 
   <div class="modal" id="handbook" role="dialog" aria-modal="true" aria-labelledby="handbook-h" hidden>
-    <div class="sheet"><h2 id="handbook-h">Employee handbook</h2><p class="sub">Form 1-A. Please initial each section.</p><ol id="handbook-list"></ol><button class="btn-go" id="close-handbook" type="button">UNDERSTOOD</button></div>
+    <div class="sheet"><div class="letterhead" aria-hidden="true"></div><h2 id="handbook-h">Employee handbook</h2><p class="sub">Form 1-A. Please initial each section.</p><ol id="handbook-list"></ol><button class="btn-go" id="close-handbook" type="button">UNDERSTOOD</button></div>
   </div>
 
   <div class="modal" id="reviews" role="dialog" aria-modal="true" aria-labelledby="reviews-h" hidden>
-    <div class="sheet"><h2 id="reviews-h">Performance reviews</h2><p class="sub" id="reviews-sub">Your file is empty. Clock in to start one.</p><ul id="reviews-list"></ul><button class="btn-go" id="close-reviews" type="button">CLOSE FILE</button></div>
+    <div class="sheet"><div class="letterhead" aria-hidden="true"></div><h2 id="reviews-h">Performance reviews</h2><p class="sub" id="reviews-sub">Your file is empty. Clock in to start one.</p><ul id="reviews-list"></ul><button class="btn-go" id="close-reviews" type="button">CLOSE FILE</button></div>
   </div>
 
   <div class="modal review" id="review" role="dialog" aria-modal="true" aria-labelledby="review-h" hidden>
     <div class="sheet">
+      <div class="letterhead" aria-hidden="true"></div>
       <p class="eyebrow" id="review-eyebrow">Shift 1 · Performance review</p>
       <h2 id="review-h">Meets Expectations</h2>
       <p class="sub" id="review-remark"></p>

@@ -2,13 +2,14 @@
 // Everything starts on the first input (autoplay policy), and a missing or undecodable file falls back to a tone.
 (function (root) {
   const MA = (root.MA = root.MA || {});
-  const FILES = { click: 'click', coin: 'coin', thud: 'footstep', hit: 'hit', quota: 'magic', hatch: 'powerup', music: 'music' };
+  const FILES = { click: 'assets/audio/click.ogg', coin: 'assets/audio/coin.ogg', thud: 'assets/audio/footstep.ogg', hit: 'assets/audio/hit.ogg', quota: 'assets/audio/magic.ogg', hatch: 'assets/audio/powerup.ogg', music: 'assets/audio/music.ogg' };
   const A = { ctx: null, master: null, buffers: {}, muted: false, started: false, musicNode: null, last: {} };
 
-  function url(name) {
+  // the produced Ogg files where the browser decodes them; the AAC copies in media/compat elsewhere (Safari)
+  function url(path) {
     const probe = document.createElement('audio');
     const ogg = probe.canPlayType && probe.canPlayType('audio/ogg; codecs="vorbis"');
-    return ogg ? `assets/audio/${name}.ogg` : `media/compat/${name}.m4a`;
+    return ogg ? path : path.replace('assets/audio/', 'media/compat/').replace('.ogg', '.m4a');
   }
   function start() {
     if (A.started) { if (A.ctx && A.ctx.state === 'suspended') A.ctx.resume(); return; }
