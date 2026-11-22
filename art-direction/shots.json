@@ -22,7 +22,7 @@
    "kind": "play",
    "steps": [
     {
-     "click": "#clock-in"
+     "selector": "#clock-in"
     }
    ],
    "wait_for": {
@@ -36,7 +36,7 @@
    "kind": "play",
    "steps": [
     {
-     "click": "#clock-in"
+     "selector": "#clock-in"
     },
     {
      "eval": "window.__game.debug.preset('mid')"
@@ -54,7 +54,7 @@
    "moment": "the-swat",
    "steps": [
     {
-     "click": "#clock-in"
+     "selector": "#clock-in"
     },
     {
      "eval": "window.__game.debug.preset('mid')"
@@ -81,7 +81,7 @@
    "moment": "quota-met",
    "steps": [
     {
-     "click": "#clock-in"
+     "selector": "#clock-in"
     },
     {
      "eval": "window.__game.debug.preset('mid')"
@@ -105,7 +105,7 @@
    "moment": "wake-up",
    "steps": [
     {
-     "click": "#clock-in"
+     "selector": "#clock-in"
     },
     {
      "eval": "window.__game.debug.preset('mid')"
@@ -128,7 +128,7 @@
    "kind": "results",
    "steps": [
     {
-     "click": "#clock-in"
+     "selector": "#clock-in"
     },
     {
      "eval": "window.__game.debug.preset('mid')"
@@ -148,7 +148,7 @@
    "kind": "screen",
    "steps": [
     {
-     "click": "#open-handbook"
+     "selector": "#open-handbook"
     }
    ],
    "wait_for": {
