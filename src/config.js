@@ -33,11 +33,11 @@
   ];
 
   const BUILDINGS = {
-    rig: { name: 'Extraction rig', short: 'Rig', cost: 60, growth: 1.8, blurb: 'Bite stations on the subject. More stations, more staff on skin at once.', effect: (l) => `${4 + 3 * (l - 1)} bite stations`, single: true, maxLevel: 6 },
-    tank: { name: 'Storage tank', short: 'Tank', cost: 40, growth: 1.45, blurb: 'Holds raw blood until Refining gets to it.', effect: (l) => `Holds ${Math.round(120 * (1 + 0.75 * (l - 1)))} mL` },
-    refinery: { name: 'Refinery', short: 'Refinery', cost: 90, growth: 1.6, blurb: 'Turns raw blood into banked product you can spend.', effect: (l) => `${3 * l} refining stations` },
-    hatchery: { name: 'Hatchery', short: 'Hatchery', cost: 70, growth: 1.7, blurb: 'Nurses raise new hires here. Each hire costs banked blood.', effect: (l) => `${2 * l} nurse stations` },
-    pool: { name: 'Breeding pool', short: 'Pool', cost: 50, growth: 1.5, blurb: 'Standing water. Staff housing, technically.', effect: (l) => `Houses ${10 * l} staff` },
+    rig: { name: 'Extraction rig', short: 'Rig', cost: 60, growth: 1.8, blurb: 'Bite stations on the subject. More stations, more staff on skin at once.', effect: (l) => `${4 + 3 * (l - 1)} bite stations`, gain: '+3 bite spots', single: true, maxLevel: 6 },
+    tank: { name: 'Storage tank', short: 'Tank', cost: 40, growth: 1.45, blurb: 'Holds raw blood until Refining gets to it.', effect: (l) => `Holds ${Math.round(120 * (1 + 0.75 * (l - 1)))} mL`, gain: '+120 mL held' },
+    refinery: { name: 'Refinery', short: 'Refinery', cost: 90, growth: 1.6, blurb: 'Turns raw blood into banked product you can spend.', effect: (l) => `${3 * l} refining stations`, gain: '+3 refiners' },
+    hatchery: { name: 'Hatchery', short: 'Hatchery', cost: 70, growth: 1.7, blurb: 'Nurses raise new hires here. Each hire costs banked blood.', effect: (l) => `${2 * l} nurse stations`, gain: '+2 nurses' },
+    pool: { name: 'Breeding pool', short: 'Pool', cost: 50, growth: 1.5, blurb: 'Standing water. Staff housing, technically.', effect: (l) => `Houses ${10 * l} staff`, gain: '+10 housing' },
   };
   const BUILD_ORDER = ['tank', 'pool', 'hatchery', 'refinery', 'rig'];
 
@@ -51,13 +51,13 @@
     { id: 'webinar', name: 'Wellness Webinar', text: 'Morale +25. Attendance is mandatory and unpaid.', apply: (S) => { S.morale = Math.min(100, S.morale + 25); } },
     { id: 'lean', name: 'Lean Refining', text: 'Refining is 40% faster. Nobody knows what was removed.', apply: (S) => { S.mods.refine *= 1.4; } },
     { id: 'openplan', name: 'Open-Plan Hatchery', text: 'New hires arrive 35% sooner. Privacy has been deprecated.', apply: (S) => { S.mods.hatch *= 0.65; } },
-    { id: 'hazard', name: 'Hazard Pay (Deferred)', text: 'Swats and scratches claim half as many staff.', apply: (S) => { S.mods.kill *= 0.5; } },
+    { id: 'hazard', rank: 1, name: 'Hazard Pay (Deferred)', text: 'Swats and scratches claim half as many staff.', apply: (S) => { S.mods.kill *= 0.5; } },
     { id: 'synergy', name: 'Cross-Functional Synergy', text: 'Everything is 10% better. Nobody can say why.', apply: (S) => { S.mods.extract *= 1.1; S.mods.refine *= 1.1; S.mods.hatch *= 0.9; } },
     { id: 'jit', name: 'Just-In-Time Storage', text: 'Tanks hold 60% more. The tanks were not consulted.', apply: (S) => { S.mods.cap *= 1.6; } },
     { id: 'quiet', name: 'Quiet Hours', text: 'The subject is 25% slower to irritate. Please whine softly.', apply: (S) => { S.mods.irritation *= 0.75; } },
-    { id: 'interns', name: 'Unpaid Internship', text: 'Six interns start immediately. They are thrilled to be here.', apply: (S, sim) => { S.mods.housing += 6; for (let i = 0; i < 6; i++) sim.hire(S, true); } },
-    { id: 'drill', name: 'Quarterly Safety Drill', text: 'All Hands Back is ready twice as often.', apply: (S) => { S.mods.recallCd *= 0.5; } },
-    { id: 'buyback', name: 'Stock Buyback', text: '+200 mL banked, effective immediately. Do not ask from where.', apply: (S) => { S.bank += 200; } },
+    { id: 'interns', rank: 2, name: 'Unpaid Internship', text: 'Six interns start immediately. They are thrilled to be here.', apply: (S, sim) => { S.mods.housing += 6; for (let i = 0; i < 6; i++) sim.hire(S, true); } },
+    { id: 'drill', rank: 3, name: 'Quarterly Safety Drill', text: 'All Hands Back is ready twice as often.', apply: (S) => { S.mods.recallCd *= 0.5; } },
+    { id: 'buyback', rank: 4, name: 'Stock Buyback', text: '+200 mL banked, effective immediately. Do not ask from where.', apply: (S) => { S.bank += 200; } },
   ];
 
   const SLEEPERS = [
@@ -125,6 +125,9 @@
     [0, 'Performance Improvement Plan', 'Please bring your badge to the meeting.'],
   ];
 
+  // career: review points add up across shifts; each promotion puts one more policy in corporate's drawer
+  const RANKS = [[0, 'Acting Plant Manager'], [90, 'Plant Manager'], [220, 'Senior Plant Manager'], [400, 'Regional Manager'], [650, 'VP of Extraction']];
+
   const HANDBOOK = [
     ['Your job', 'Extract as much of the subject\'s blood as you can before the alarm. The subject cannot be harmed. Corporate checked.'],
     ['The line', 'Extraction bites and fills the tanks. Refining turns tank blood into banked product. Banked product pays for everything.'],
@@ -132,8 +135,9 @@
     ['The subject', 'Every bite raises irritation. Irritation becomes scratches and swats, which cost staff and sleep. Pace sets how hard you push.'],
     ['All Hands Back', 'When the hand twitches you have about a second. Pull the crew and nobody is lost.'],
     ['Quotas', 'Each quarter has a quota. Meet it and corporate sends a policy to choose. Miss it and they recalibrate.'],
+    ['Your career', 'Every review adds to your file. Promotions put new policies in corporate\'s drawer for later shifts.'],
   ];
 
-  MA.config = { PALETTE, FEEL, ECON, PACE, BUILDINGS, BUILD_ORDER, PADS, SITES, POLICIES, SLEEPERS, FIRST, LAST, TRAITS, JOB_NAMES, MEMOS, RATINGS, HANDBOOK };
+  MA.config = { PALETTE, FEEL, ECON, PACE, BUILDINGS, BUILD_ORDER, PADS, SITES, POLICIES, SLEEPERS, FIRST, LAST, TRAITS, JOB_NAMES, MEMOS, RATINGS, RANKS, HANDBOOK };
   if (typeof module !== 'undefined') module.exports = MA;
 })(typeof window !== 'undefined' ? window : globalThis);

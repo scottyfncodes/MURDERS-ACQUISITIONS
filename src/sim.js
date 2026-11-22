@@ -13,7 +13,7 @@
     const rand = mulberry(seed);
     const sleeper = C.SLEEPERS[clamp(opts.sleeper | 0, 0, C.SLEEPERS.length - 1)];
     const S = {
-      seed, rand, sleeper, shiftNo: opts.shiftNo || 1, state: 'playing', time: 0, shiftLen: sleeper.shift, sleepLost: 0, wakeT: 0,
+      seed, rand, sleeper, shiftNo: opts.shiftNo || 1, rank: opts.rank | 0, state: 'playing', time: 0, shiftLen: sleeper.shift, sleepLost: 0, wakeT: 0,
       bank: ECON.startBank, raw: 0, taken: 0, extracted: 0, refined: 0, spent: 0, supply: sleeper.supply,
       irritation: 0, morale: 70, pace: 1, hiring: true, staff: { refine: 2, hatch: 0 },
       workers: [], lost: [], nextId: 1, buildings: [], nextBid: 1, site: 'arm', siteBlocked: 0, covered: 0,
@@ -152,7 +152,7 @@
     const qLen = S.shiftLen / 4;
     while (S.quarter < 4 && S.extracted >= S.quotas[S.quarter]) {
       S.quarter++; S.quotasMet++;
-      const pool = POLICIES.filter((p) => !S.policies.includes(p.id)).sort(() => S.rand() - 0.5).slice(0, 3);
+      const pool = POLICIES.filter((p) => !S.policies.includes(p.id) && (p.rank || 0) <= S.rank).sort(() => S.rand() - 0.5).slice(0, 3);
       S.offer = pool.map((p) => p.id); S.events.push({ type: 'quotaMet', quarter: S.quarter }); memo(S, MEMOS.quotaMet(S.quarter), 'good');
       return;
     }

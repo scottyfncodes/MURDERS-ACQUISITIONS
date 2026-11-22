@@ -13,15 +13,16 @@
   const SAVE_KEY = 'murders-acquisitions.v1';
   const num = (v, d) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : d);
   function loadSave() {
-    const base = { shifts: 0, best: null, reviews: [], muted: false, lastSleeper: -1, seenHint: false };
+    const base = { shifts: 0, best: null, reviews: [], muted: false, lastSleeper: -1, seenHint: false, career: 0 };
     try {
       const raw = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); if (!raw || typeof raw !== 'object') return base;
       const rev = (r) => r && typeof r === 'object' && typeof r.rating === 'string' ? { shiftNo: num(r.shiftNo, 1), sleeper: String(r.sleeper || '').slice(0, 60), rating: r.rating.slice(0, 40), score: num(r.score, 0), extracted: num(r.extracted, 0), pct: num(r.pct, 0), casualties: num(r.casualties, 0) } : null;
-      return { shifts: num(raw.shifts, 0), best: rev(raw.best), reviews: Array.isArray(raw.reviews) ? raw.reviews.map(rev).filter(Boolean).slice(0, 8) : [], muted: raw.muted === true, lastSleeper: num(raw.lastSleeper, -1), seenHint: raw.seenHint === true };
+      return { shifts: num(raw.shifts, 0), best: rev(raw.best), reviews: Array.isArray(raw.reviews) ? raw.reviews.map(rev).filter(Boolean).slice(0, 8) : [], muted: raw.muted === true, lastSleeper: num(raw.lastSleeper, -1), seenHint: raw.seenHint === true, career: Math.min(num(raw.career, 0), 1e6) };
     } catch (e) { return base; }
   }
   function store() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* private mode: play on without saving */ } }
   const save = loadSave();
+  const rankOf = (pts) => { let i = 0; C.RANKS.forEach((r, k) => { if (pts >= r[0]) i = k; }); return i; };
 
   // ---------- state ----------
   const cv = $('game'), ctx = cv.getContext('2d');
@@ -48,13 +49,13 @@
   function clockIn() {
     audio.start(); audio.play('click');
     let sl = 0; if (save.shifts > 0) { do { sl = (Math.random() * C.SLEEPERS.length) | 0; } while (sl === save.lastSleeper && C.SLEEPERS.length > 1); }
-    G.S = sim.newShift({ sleeper: sl, shiftNo: save.shifts + 1 }); save.lastSleeper = sl;
+    G.S = sim.newShift({ sleeper: sl, shiftNo: save.shifts + 1, rank: rankOf(save.career) }); save.lastSleeper = sl;
     G.mode = 'play'; G.paused = false; G.selected = null; G.acc = 0; G.memoQ = []; G.memoUntil = 0; G.shown = {}; G.rosterDirty = true; R.fx.parts.length = 0; R.fx.labels.length = 0;
     document.body.classList.remove('is-title', 'morning'); $('hud').hidden = false; $('quota-stamp').hidden = true;
     closeModal(); setTab('build'); drainEvents(); if (!save.seenHint) G.memoQ.unshift({ text: 'Welcome aboard. Tap a card below to build. The crew does the rest.', tone: 'warn' });
   }
   function toTitle() { G.mode = 'title'; G.S = null; G.demo = makeDemo(); closeModal(); document.body.classList.add('is-title'); document.body.classList.remove('morning'); $('hud').hidden = true; $('quota-stamp').hidden = true; titleStatus(); }
-  function titleStatus() { $('title-status').textContent = save.best ? `Shift ${save.shifts + 1} · Best review: ${save.best.rating}, ${fmt(save.best.extracted)} mL` : 'Shift 1 · Subject asleep since 11:42 PM'; }
+  function titleStatus() { $('title-status').textContent = save.best ? `${C.RANKS[rankOf(save.career)][1]} · Shift ${save.shifts + 1} · Best ${fmt(save.best.extracted)} mL` : 'Shift 1 · Subject asleep since 11:42 PM'; }
 
   // ---------- modals ----------
   function openModal(id) { closeModal(true); G.modal = id; const el = $(id); el.hidden = false; const b = el.querySelector('button'); if (b) b.focus({ preventScroll: true }); if (id === 'handbook') el.setAttribute('data-open', ''); }
@@ -73,17 +74,18 @@
   const cards = {};
   function buildCards() {
     const p = $('panel-build'); p.innerHTML = '';
-    C.BUILD_ORDER.forEach((type, i) => { const def = C.BUILDINGS[type], b = document.createElement('button'); b.type = 'button'; b.className = 'card'; b.id = `build-${type}`; b.innerHTML = `<b>${def.name}</b><small></small><span></span>`; b.addEventListener('click', () => { audio.start(); if (G.S) sim.build(G.S, type); drainEvents(); }); b.title = `${def.blurb} (${i + 1})`; p.append(b); cards[type] = b; });
+    C.BUILD_ORDER.forEach((type, i) => { const def = C.BUILDINGS[type], b = document.createElement('button'); b.type = 'button'; b.className = 'card'; b.id = `build-${type}`; b.innerHTML = `<b>${def.name}</b><small>${def.gain}</small><span></span>`; b.addEventListener('click', () => { audio.start(); if (G.S) sim.build(G.S, type); drainEvents(); }); b.title = `${def.blurb} (${i + 1})`; p.append(b); cards[type] = b; });
   }
   function updateCards() {
     const S = G.S, d = sim.derived(S);
     for (const type of C.BUILD_ORDER) {
       const def = C.BUILDINGS[type], cost = sim.costOf(S, type), el = cards[type]; if (!el.isConnected) return;
       const lvl = def.single ? S.buildings.find((b) => b.type === type).level : 0;
-      const sub = def.single ? (cost === Infinity ? 'Fully built' : `Lv ${lvl} → ${lvl + 1}`) : d.counts[type] ? `${d.counts[type]} built` : 'None yet';
-      const price = cost === Infinity ? (def.single ? 'Max' : 'No room') : `${fmt(cost)} mL`;
+      const sub = def.gain;
+      const own = def.single ? `Lv ${lvl}` : `×${d.counts[type]}`;
+      const price = cost === Infinity ? (def.single ? `Max · ${own}` : `No room · ${own}`) : `${fmt(cost)} mL · ${own}`;
       if (el._sub !== sub) { el._sub = sub; el.children[1].textContent = sub; } if (el._price !== price) { el._price = price; el.children[2].textContent = price; }
-      el.classList.toggle('can', cost <= S.bank);
+      el.classList.toggle('can', cost <= S.bank); el.classList.toggle('nudge', !save.seenHint && cost <= S.bank && (type === 'tank' || type === 'pool'));
     }
   }
   function showInspector() {
@@ -160,13 +162,15 @@
     openModal('policy');
   }
   function finish() {
-    const r = sim.review(G.S); save.shifts++;
+    const r = sim.review(G.S); save.shifts++; const rank0 = rankOf(save.career); save.career += r.score; const rank1 = rankOf(save.career);
     const slim = { shiftNo: r.shiftNo, sleeper: r.sleeper, rating: r.rating, score: r.score, extracted: r.extracted, pct: r.pct, casualties: r.casualties };
     const newBest = !save.best || r.score > save.best.score || (r.score === save.best.score && r.extracted > save.best.extracted); const prev = save.best; if (newBest) save.best = slim;
     save.reviews.unshift(slim); save.reviews = save.reviews.slice(0, 8); store();
     $('review-eyebrow').textContent = `Shift ${r.shiftNo} · ${r.sleeper}`; $('review-h').textContent = r.rating; $('review-remark').textContent = r.remark;
     $('r-extracted').textContent = `${fmt(r.extracted)} mL`; $('r-pct').textContent = `${r.pct}%`; $('r-eff').textContent = `${r.efficiency}%`; $('r-lost').textContent = String(r.casualties); $('r-quotas').textContent = `${r.quotasMet} of 4`; $('r-score').textContent = `${r.score}/100`;
     $('r-best').textContent = newBest ? (prev ? `New best on file. Previous best: ${prev.rating}, ${fmt(prev.extracted)} mL.` : 'First review on file. Corporate has opened a folder with your name on it.') : `Best on file: ${save.best.rating}, ${fmt(save.best.extracted)} mL.`;
+    const unlocked = C.POLICIES.filter((p) => (p.rank || 0) > rank0 && (p.rank || 0) <= rank1).map((p) => p.name);
+    $('r-career').textContent = rank1 > rank0 ? `Promoted to ${C.RANKS[rank1][1]}. New in corporate's drawer: ${unlocked.join(', ')}.` : rank1 < C.RANKS.length - 1 ? `${C.RANKS[rank1][1]} · ${C.RANKS[rank1 + 1][0] - save.career} review points to ${C.RANKS[rank1 + 1][1]}.` : `${C.RANKS[rank1][1]}. There is nowhere left to be promoted to.`; $('r-career').classList.toggle('promo', rank1 > rank0); store();
     const list = $('r-lost-list'); list.innerHTML = ''; for (const w of r.lost) { const li = document.createElement('li'); li.textContent = `${w.name} `; const s = document.createElement('span'); s.textContent = `· ${w.trait} · supported ${w.larvae} larvae`; li.append(s); list.append(li); }
     $('r-memoriam').hidden = r.lost.length === 0; $('hud').hidden = true;
     openModal('review'); $('review').setAttribute('data-ready', '');
@@ -235,7 +239,7 @@
   window.__game = {
     get state() { return G.mode === 'title' ? 'title' : G.S.state; }, get paused() { return G.paused; }, get score() { return G.S ? Math.round(G.S.extracted) : 0; }, get time() { return G.S ? G.S.time : 0; },
     get bank() { return G.S ? Math.floor(G.S.bank) : 0; }, get workers() { return G.S ? G.S.workers.length : 0; }, get buildings() { return G.S ? G.S.buildings.length : 0; }, get casualties() { return G.S ? G.S.lost.length : 0; },
-    get irritation() { return G.S ? G.S.irritation : 0; }, get quotasMet() { return G.S ? G.S.quotasMet : 0; }, get sleepLeft() { return G.S ? G.S.shiftLen - G.S.sleepLost - G.S.time : 0; }, get fx() { return fxName(G.S); }, get best() { return save.best ? save.best.score : 0; },
+    get irritation() { return G.S ? G.S.irritation : 0; }, get rank() { return rankOf(save.career); }, get career() { return save.career; }, get quotasMet() { return G.S ? G.S.quotasMet : 0; }, get sleepLeft() { return G.S ? G.S.shiftLen - G.S.sleepLost - G.S.time : 0; }, get fx() { return fxName(G.S); }, get best() { return save.best ? save.best.score : 0; },
     debug: {
       preset(name) { if (G.S && name === 'mid') { preset(G.S, false); G.rosterDirty = true; G.memoQ = [{ text: C.MEMOS.idle[2], tone: 'idle' }]; G.memoUntil = 0; G.uiAt = 0; updateHud(0, performance.now() / 1000); } },
       trigger(what) { const S = G.S; if (!S || S.state !== 'playing') return; if (what === 'swat') { S.hev = null; S.eventCd = 1e9; for (let i = 0; i < 300 && !(i > 30 && S.biting >= 3); i++) { S.siteBlocked = 0; S.covered = 0; S.recallT = 0; S.irritation = Math.min(S.irritation, 20); sim.step(S, STEP); drainEvents(); } S.eventCd = 6; sim.startEvent(S, 'swat'); } else if (what === 'quota') { S.extracted = Math.max(S.extracted, S.quotas[Math.min(3, S.quarter)]); } else if (what === 'wake') sim.wake(S); else if (['scratch', 'roll', 'blanket', 'stir'].includes(what)) { S.hev = null; sim.startEvent(S, what); } drainEvents(); },

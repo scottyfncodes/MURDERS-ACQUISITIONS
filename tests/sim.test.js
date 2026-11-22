@@ -50,3 +50,7 @@ for (const k of ['extracted', 'pct', 'efficiency', 'casualties', 'score', 'ratin
 // every sleeper finishes a shift
 for (let i = 0; i < config.SLEEPERS.length; i++) { const x = play({ seed: 3 + i, sleeper: i, careful: true }); assert.strictEqual(x.S.state, 'over'); console.log('sleeper', i, x.r.extracted, x.r.pct + '%', x.r.rating, 'staff', x.r.peakStaff, 'lost', x.r.casualties, 'quotas', x.r.quotasMet); }
 console.log('sim ok');
+// promotions widen the policy drawer: rank 0 never offers a rank-gated policy
+{ const gated = config.POLICIES.filter((p) => p.rank).map((p) => p.id); for (let s = 1; s < 30; s++) { const S = sim.newShift({ seed: s, rank: 0 }); S.extracted = S.quotas[0]; sim.step(S, 1 / 30); assert.ok(S.offer && S.offer.every((id) => !gated.includes(id)), 'rank 0 offer'); }
+  let seen = false; for (let s = 1; s < 40 && !seen; s++) { const S = sim.newShift({ seed: s, rank: 4 }); S.extracted = S.quotas[0]; sim.step(S, 1 / 30); seen = S.offer.some((id) => gated.includes(id)); } assert.ok(seen, 'rank 4 can be offered gated policies'); }
+console.log('career ok');
