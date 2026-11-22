@@ -5,11 +5,11 @@
   const FILES = { click: 'assets/audio/click.ogg', coin: 'assets/audio/coin.ogg', thud: 'assets/audio/footstep.ogg', hit: 'assets/audio/hit.ogg', quota: 'assets/audio/magic.ogg', hatch: 'assets/audio/powerup.ogg', music: 'assets/audio/music.ogg' };
   const A = { ctx: null, master: null, buffers: {}, muted: false, started: false, musicNode: null, last: {} };
 
-  // the produced Ogg files where the browser decodes them; the AAC copies in media/compat elsewhere (Safari)
+  // the produced Ogg files where the browser decodes them; the MP3 copies in media/compat elsewhere (Safari)
   function url(path) {
     const probe = document.createElement('audio');
     const ogg = probe.canPlayType && probe.canPlayType('audio/ogg; codecs="vorbis"');
-    return ogg ? path : path.replace('assets/audio/', 'media/compat/').replace('.ogg', '.m4a');
+    return ogg ? path : path.replace('assets/audio/', 'media/compat/').replace('.ogg', '.mp3');
   }
   function start() {
     if (A.started) { if (A.ctx && A.ctx.state === 'suspended') A.ctx.resume(); return; }

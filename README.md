@@ -28,7 +28,7 @@ There is no build step and there are no dependencies.
 | `tests/sim.test.js` | Headless simulation checks: `node tests/sim.test.js` |
 | `art-direction/` | The approved look and the shot list |
 
-Audio in `assets/audio` is Ogg; `media/compat` holds AAC copies for browsers that cannot decode Ogg.
+Audio in `assets/audio` is Ogg; `media/compat` holds MP3 copies for browsers that cannot decode Ogg.
 Fonts are Alfa Slab One and Archivo (SIL Open Font License, see `fonts/NOTICE.md`).
 
 by HaveAnApp
