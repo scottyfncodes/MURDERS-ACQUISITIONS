@@ -3,7 +3,7 @@
 (function (root) {
   const MA = (root.MA = root.MA || {});
   const C = MA.config;
-  const { FEEL, ECON, PACE, BUILDINGS, PADS, SITES, POLICIES, MEMOS, NOTES, NEST } = C;
+  const { FEEL, ECON, PACE, BUILDINGS, PADS, SITES, POLICIES, MEMOS, NOTES, NEST, ZONES } = C;
 
   function mulberry(seed) { let a = seed >>> 0; return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -13,25 +13,30 @@
   function newNight(camp, opts) {
     opts = opts || {};
     const seed = Number.isFinite(opts.seed) ? opts.seed : (Date.now() & 0x7fffffff);
-    const host = C.HOST, n = camp.night, len = MA.campaign.nightLength(n), fresh = camp.hires === 0 && camp.buildings.length === 0;
+    const host = C.HOST, n = camp.night, day = !!opts.day, len = day ? Infinity : MA.campaign.nightLength(n), fresh = camp.hires === 0 && camp.buildings.length === 0;
     const S = {
-      seed, rand: mulberry(seed), night: n, host, sleeper: host, state: 'playing', time: 0, shiftLen: len, sleepLost: 0, wakeT: 0,
-      bank: camp.bank, extracted: 0, spent: 0, taken: 0, supply: host.supply, irritation: 0, morale: 70, pace: 1, hold: false, hiring: true,
+      seed, rand: mulberry(seed), night: n, phase: day ? 'day' : 'night', host, sleeper: host, state: 'playing', time: 0, shiftLen: len, sleepLost: 0, wakeT: 0,
+      bank: camp.bank, refined: Math.min(camp.bank, camp.refined || 0), zones: camp.zones || 1, refineRate: 0, extracted: 0, spent: 0, taken: 0, supply: host.supply, irritation: 0, morale: 70, pace: 1, hold: false, hiring: true,
       founder: { pos: [NEST[0] + 0.3, NEST[1] + 0.2, 0.9], st: 'home', t: 0, dur: 1, from: null, to: null, belly: 0, greed: 0, trips: 0 },
       workers: [], lost: [], nextId: camp.nextId, hires: camp.hires, buildings: [], nextBid: 1,
       site: 'arm', siteBlocked: 0, covered: 0, recallT: 0, recallCd: 0, hev: null, eventCd: 4, armOut: 1, footOut: 0,
       unlocked: camp.unlocks.slice(), corp: false, hatchProgress: 0, hatchCost: 0, rate: 0, recent: [],
       quarter: 0, quotasMet: 0, quotas: [], policies: [], offer: null,
       mods: { extract: 1, bite: 1, refine: 1, hatch: 1, cap: 1, irritation: 1, kill: 1, recallCd: 1, housing: 0, moraleDrift: 0 },
-      schedule: n >= 2 ? [{ at: 0.35, kind: 'blanket' }, { at: 0.5, kind: 'roll' }, { at: 0.68, kind: 'blanket' }].map((e) => ({ at: Math.round(e.at * len), kind: e.kind })) : [],
-      tut: n === 1 && fresh ? { step: 'bite', at: 0, scratched: false } : null,
-      events: [], flags: {}, stats: { loads: 0, manualMl: 0, autoMl: 0, swats: 0, scratches: 0, nearMisses: 0, peakStaff: 0, queuedSeconds: 0, slotWait: 0, hires: 0, built: 0, idleNoteAt: 40, firstHireAt: null, firstAuto: false },
+      schedule: n >= 2 && !day ? [{ at: 0.35, kind: 'blanket' }, { at: 0.5, kind: 'roll' }, { at: 0.68, kind: 'blanket' }].map((e) => ({ at: Math.round(e.at * len), kind: e.kind })) : [],
+      tut: n === 1 && fresh && !day ? { step: 'bite', at: 0, scratched: false } : null,
+      events: [], flags: {}, stats: { longTrip: 0, loads: 0, manualMl: 0, autoMl: 0, swats: 0, scratches: 0, nearMisses: 0, peakStaff: 0, queuedSeconds: 0, slotWait: 0, hires: 0, built: 0, idleNoteAt: 40, firstHireAt: null, firstAuto: false },
     };
     S.buildings.push({ id: S.nextBid++, type: 'nest', level: 1, pad: -2, born: -9 });
     for (const b of camp.buildings) S.buildings.push({ id: S.nextBid++, type: b.type, level: b.level, pad: b.pad, born: -9 });
     for (const w of camp.workers) S.workers.push(body(S, w, spawnPoint(S)));
     S.stats.peakStaff = S.workers.length;
-    if (n >= 2) { unlock(S, 'tank'); unlock(S, 'pool'); if (S.workers.length) unlock(S, 'scatter'); S.events.length = 0; note(S, NOTES.nightStart(n, S.workers.length)); }
+    S.bank = Math.min(S.bank, derived(S).cap); S.refined = Math.min(S.refined, S.bank);
+    if (n >= 2) {
+      unlock(S, 'tank'); unlock(S, 'pool'); if (S.workers.length) unlock(S, 'scatter'); S.events.length = 0;
+      if (!day) note(S, NOTES.nightStart(n, S.workers.length));
+      else { const clot = camp.history[0] && camp.history[0].clotted; note(S, clot && !S.buildings.some((b) => b.type === 'refinery') ? NOTES.clotted(clot) : NOTES.dayStart(n - 1), clot ? 'warn' : 'info'); }
+    }
     return S;
   }
 
@@ -41,13 +46,19 @@
 
   // ---------- the colony ----------
   function padCenter(b) { const p = b.pad < 0 ? null : PADS[b.pad]; return p ? [p[0] + 1.0, p[1] + 0.9] : null; }
-  function storePoint(b) { if (b.type === 'nest') return [NEST[0], NEST[1], 0.75]; const c = padCenter(b); return [c[0], c[1], 1.6 + b.level * 0.45 + 0.5]; }
+  function storePoint(b, S) { if (b.type === 'nest') return [NEST[0], NEST[1], 0.75]; if (b.type === 'drip') { const r = sitePos(S).rig; return [r[0] + 1.6, r[1] + 0.4, 1.5]; } const c = padCenter(b); return [c[0], c[1], 1.6 + b.level * 0.45 + 0.5]; }
   function sitePos(S) { return SITES[S.site]; }
   function skinPoint(S) { const k = sitePos(S).skin; return [k[0], k[1], k[2]]; }
   function founderSkin(S) { const k = sitePos(S).skin; return S.site === 'arm' ? [k[0] + 0.2, k[1] + 0.25, k[2] + 0.3] : [k[0] + 0.25, k[1] + 0.1, k[2] + 0.3]; }
   // crews unload at the storage nearest the bite: this is why placement matters
-  function nearestStore(S) { const k = skinPoint(S); let best = null, bd = Infinity; for (const b of S.buildings) if (b.type === 'nest' || b.type === 'tank') { const d = flyTime(storePoint(b), k); if (d < bd - 1e-9) { bd = d; best = b; } } return best; }
-  function tripSeconds(S, b) { const k = skinPoint(S), p = storePoint(b); return 2 * flyTime(p, k); }
+  // crews unload at the storage nearest the bite (tanks and the drip line; the bottle cap is Rhonda's): this is why placement matters
+  function nearestStore(S, founder) {
+    const k = skinPoint(S); let best = null, bd = Infinity;
+    const ok = (b) => b.type === 'tank' || b.type === 'drip' || (b.type === 'nest' && founder);
+    for (const b of S.buildings) if (ok(b)) { const d = flyTime(storePoint(b, S), k); if (d < bd - 1e-9) { bd = d; best = b; } }
+    return best || S.buildings.find((b) => b.type === 'nest');
+  }
+  function tripSeconds(S, b) { const k = skinPoint(S), p = storePoint(b, S); return 2 * flyTime(p, k); }
   function spawnPoint(S) { const pools = S.buildings.filter((b) => b.type === 'pool'); const b = pools.length ? pools[(S.workers.length) % pools.length] : null; const c = b ? padCenter(b) : NEST; return [c[0], c[1], 0.7]; }
 
   function derived(S) {
@@ -61,26 +72,34 @@
     d.cap = Math.round(d.cap * S.mods.cap);
     return d;
   }
-  function freePads(S) { const used = new Set(S.buildings.map((b) => b.pad)); const out = []; for (let i = 0; i < PADS.length; i++) if (!used.has(i)) out.push(i); return out; }
+  function openPads(S) { return ZONES.slice(0, S.zones).flat(); }
+  function freePads(S) { const used = new Set(S.buildings.map((b) => b.pad)); return openPads(S).filter((i) => !used.has(i)).sort((a, b) => a - b); }
   // free pads, closest trip first: what the placement view shows and the bots in the tests use
   function padsByTrip(S) { const k = skinPoint(S); return freePads(S).map((i) => { const c = padCenter({ pad: i }); return { pad: i, trip: 2 * flyTime([c[0], c[1], 2.6], k) }; }).sort((a, b) => a.trip - b.trip); }
 
   function costOf(S, type) {
     const def = BUILDINGS[type]; if (!def || type === 'nest') return Infinity;
+    if (def.expand) return S.zones >= ZONES.length ? Infinity : def.cost;
     if (def.single) { const b = S.buildings.find((x) => x.type === type); return b ? upgradeCost(b) : def.cost; }
-    if (!freePads(S).length) return Infinity;
+    if (!freePads(S).length) { const b = cheapestUpgrade(S, type); return b ? upgradeCost(b) : Infinity; }
     return Math.round(def.cost * Math.pow(def.growth, S.buildings.filter((x) => x.type === type).length));
   }
+  // with no floor left, a card upgrades the cheapest building of its kind instead
+  function cheapestUpgrade(S, type) { let best = null; for (const b of S.buildings) if (b.type === type && upgradeCost(b) < (best ? upgradeCost(best) : Infinity)) best = b; return best; }
   function upgradeCost(b) { const def = BUILDINGS[b.type]; const max = def.maxLevel || ECON.maxLevel; return b.level >= max ? Infinity : def.single ? Math.round(def.cost * Math.pow(def.growth, b.level)) : Math.round(def.cost * 1.6 * Math.pow(2, b.level - 1)); }
+  // spending takes raw blood first: refined blood is the part worth keeping
+  function spend(S, cost) { const raw = S.bank - S.refined; if (cost > raw) S.refined = Math.max(0, S.refined - (cost - raw)); S.bank -= cost; S.spent += cost; }
   function pay(S, cost, what) {
     if (!(cost <= S.bank)) { S.events.push({ type: 'deny', what, cost }); return false; }
-    S.bank -= cost; S.spent += cost; return true;
+    spend(S, cost); return true;
   }
 
   function build(S, type, pad) {
     const def = BUILDINGS[type];
     if (S.state !== 'playing' || !def || !S.unlocked.includes(type)) return null;
+    if (def.expand) { const cost = costOf(S, type); if (cost === Infinity || !pay(S, cost, type)) return null; S.zones++; S.events.push({ type: 'expand', zone: S.zones - 1, cost }); note(S, NOTES.floorBought, 'good'); return { type, zone: S.zones - 1 }; }
     if (def.single) { const have = S.buildings.find((b) => b.type === type); if (have) return upgrade(S, have.id); }
+    else if (!freePads(S).length && def.place) { const b = cheapestUpgrade(S, type); if (!b) { S.events.push({ type: 'deny', what: type, cost: 0 }); return null; } return upgrade(S, b.id); }
     else if (!Number.isInteger(pad) || !freePads(S).includes(pad)) { S.events.push({ type: 'deny', what: type, cost: 0 }); return null; }
     const cost = costOf(S, type);
     if (!pay(S, cost, type)) return null;
@@ -91,6 +110,7 @@
       else if (type === 'pool' && (S.tut.step === 'pool' || S.tut.step === 'fill' || S.tut.step === 'tank')) { S.tut.step = 'eggs'; note(S, NOTES.eggs, 'good'); }
     }
     if (type === 'tank') unlock(S, 'pool');
+    if (type === 'refinery') note(S, NOTES.refineryBuilt, 'good');
     return b;
   }
   function upgrade(S, id) {
@@ -130,7 +150,7 @@
     for (const w of S.workers) if (w.job === 'extract' && (w.st === 'bite' || w.st === 'toSkin')) { w.st = 'retreat'; fly(w, waitPoint(S, w), 0.45); }
     const f = S.founder; if (f.st === 'drink' || f.st === 'toSkin') { f.st = 'toHome'; const h = homePoint(S); fly(f, h, 0.6); }
   }
-  function homePoint(S) { const p = storePoint(nearestStore(S)); return [p[0] + 0.35, p[1] + 0.25, p[2] + 0.35]; }
+  function homePoint(S) { const p = storePoint(nearestStore(S, true), S); return [p[0] + 0.35, p[1] + 0.25, p[2] + 0.35]; }
 
   // ---------- the founder: the only mosquito the player flies ----------
   function founderStep(S, dt, open) {
@@ -140,7 +160,7 @@
     if (f.st === 'home') {
       if (f.belly > 0.01) deposit(S, f, d, true);
       if (S.hold) {
-        if (!open || S.state !== 'playing') { if (!f.denied) { f.denied = true; S.events.push({ type: 'deny', what: 'bite' }); } }
+        if (!open || S.state !== 'playing' || S.phase === 'day') { if (!f.denied) { f.denied = true; S.events.push({ type: 'deny', what: S.phase === 'day' ? 'day' : 'bite' }); } }
         else if (f.belly >= ECON.bellyMl - 0.05) { if (!f.denied) { f.denied = true; S.events.push({ type: 'deny', what: 'full' }); } }
         else { const to = founderSkin(S); f.st = 'toSkin'; fly(f, to, flyTime(f.pos, to, FEEL.founder_speed)); S.events.push({ type: 'takeoff' }); }
       } else f.denied = false;
@@ -229,6 +249,7 @@
     if (S.state === 'waking') { S.wakeT += dt; if (S.wakeT >= 3) { S.state = 'over'; S.events.push({ type: 'over' }); } moveWorkers(S, dt); founderStep(S, dt, false); return; }
     if (S.state !== 'playing' || S.offer) return;
     S.time += dt;
+    if (S.phase === 'day') { founderStep(S, dt, false); moveWorkers(S, dt); S.biting = 0; S.queued = 0; S.rate = 0; S.refineRate = 0; return; }
     const d = derived(S), pace = PACE[S.pace], prod = 0.8 + 0.4 * (S.morale / 100);
     S.recallT = Math.max(0, S.recallT - dt); S.recallCd = Math.max(0, S.recallCd - dt); S.siteBlocked = Math.max(0, S.siteBlocked - dt); S.covered = Math.max(0, S.covered - dt); S.eventCd = Math.max(0, S.eventCd - dt);
     const open = siteOpen(S);
@@ -238,7 +259,7 @@
     if (S.bank >= d.cap - 0.01 && d.counts.tank === 0) once(S, 'nestFull', () => { note(S, NOTES.nestFull, 'warn'); unlock(S, 'tank'); });
 
     // the crew: wait for a free bite spot, bite, carry to the nearest storage, unload
-    const site = sitePos(S), store = nearestStore(S), sp = storePoint(store), ex = S.workers.filter((w) => w.job === 'extract');
+    const site = sitePos(S), store = nearestStore(S), sp = storePoint(store, S), ex = S.workers.filter((w) => w.job === 'extract');
     let onWay = ex.filter((w) => w.st === 'toSkin' || w.st === 'bite').length, biting = 0, queued = 0, waiting = 0;
     const biteDur = FEEL.bite_seconds * pace.bite * S.mods.bite * S.host.bite / prod;
     for (const w of ex) {
@@ -263,6 +284,12 @@
     if (S.founder.st === 'drink') biting++;
     S.biting = biting; S.queued = queued;
     if (queued > 0) { S.stats.queuedSeconds += dt; if (S.stats.queuedSeconds > 3 && d.counts.tank > 0) once(S, 'fullMemo', () => note(S, NOTES.storageFull, 'warn')); }
+    // logistics: when staff fly the long way to storage, the drip line is the answer
+    if (S.workers.length && tripSeconds(S, store) > ECON.longTripSeconds) { S.stats.longTrip += dt; if (S.stats.longTrip > 3) once(S, 'dripNeed', () => { if (unlock(S, 'drip')) note(S, NOTES.dripNeed, 'warn'); }); }
+    // the floor: when every open spot is taken, the window side is for sale
+    if (!freePads(S).length && S.zones < ZONES.length) once(S, 'floorNeed', () => { if (unlock(S, 'floor')) note(S, NOTES.floorNeed, 'warn'); });
+    // refining: stored blood becomes blood that keeps
+    { const lv = S.buildings.reduce((a, b) => a + (b.type === 'refinery' ? b.level : 0), 0), k = Math.min(S.bank - S.refined, lv * ECON.refineMlPerS * dt); S.refineRate = k > 1e-6 ? k / dt : 0; if (k > 0) S.refined += k; }
     if (waiting > 0) { S.stats.slotWait += dt; if (S.stats.slotWait > 3) once(S, 'rigNeed', () => { if (unlock(S, 'rig')) note(S, NOTES.rigNeed, 'warn'); }); }
     S.recent = S.recent.filter((r) => S.time - r[0] < 12); S.rate = S.recent.reduce((a, r) => a + r[1], 0) * 5;
 
@@ -274,7 +301,7 @@
     if (S.hatching) {
       S.hatchProgress = Math.min(1, S.hatchProgress + dt / (first ? ECON.firstHatchSeconds : ECON.hatchSeconds / Math.sqrt(pools)));
       if (S.hatchProgress >= 1 && S.bank >= S.hatchCost) {
-        S.hatchProgress = 0; S.bank -= S.hatchCost; S.spent += S.hatchCost; const w = hire(S, false);
+        S.hatchProgress = 0; spend(S, S.hatchCost); const w = hire(S, false);
         if (w) {
           S.events.push({ type: 'hatch', w, first, at: w.pos.slice() });
           if (first) { S.stats.firstHireAt = S.time; if (!S.tut) unlock(S, 'scatter'); note(S, NOTES.firstHire(w.name), 'good'); if (S.tut) S.tut.step = 'crew'; }
@@ -325,10 +352,11 @@
   }
 
   function report(S) {
-    return { night: S.night, extracted: Math.round(S.extracted), manual: Math.round(S.stats.manualMl), auto: Math.round(S.stats.autoMl), staff: S.workers.length, hires: S.stats.hires, lost: S.lost.slice(), banked: Math.floor(S.bank), cap: derived(S).cap, nearMisses: S.stats.nearMisses, scratches: S.stats.scratches, swats: S.stats.swats, built: S.stats.built, names: S.workers.map((w) => w.name) };
+    const clotted = Math.round(Math.max(0, S.bank - S.refined) * ECON.clotShare);
+    return { night: S.night, clotted, refined: Math.floor(S.refined), extracted: Math.round(S.extracted), manual: Math.round(S.stats.manualMl), auto: Math.round(S.stats.autoMl), staff: S.workers.length, hires: S.stats.hires, lost: S.lost.slice(), banked: Math.floor(S.bank), cap: derived(S).cap, nearMisses: S.stats.nearMisses, scratches: S.stats.scratches, swats: S.stats.swats, built: S.stats.built, names: S.workers.map((w) => w.name) };
   }
 
-  const api = { newNight, step, build, upgrade, hire, setHold, setPace, setHiring, recall, pickPolicy, costOf, upgradeCost, derived, report, wake, startEvent, padCenter, storePoint, nearestStore, tripSeconds, freePads, padsByTrip, sitePos, siteOpen, skinPoint };
+  const api = { newNight, step, build, upgrade, hire, setHold, setPace, setHiring, recall, pickPolicy, costOf, upgradeCost, derived, report, wake, openPads, cheapestUpgrade, startEvent, padCenter, storePoint, nearestStore, tripSeconds, freePads, padsByTrip, sitePos, siteOpen, skinPoint };
   MA.sim = api;
   if (typeof module !== 'undefined') module.exports = MA;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -36,7 +36,7 @@ function play(camp, opts) {
       if (!S.unlocked.includes(t)) continue; seen[t] = seen[t] || S.time;
       if (S.time - seen[t] < 2.5 || sim.costOf(S, t) > S.bank) continue;
       if (t === 'tank' && sim.derived(S).counts.tank > 0 && S.queued === 0 && S.bank < sim.derived(S).cap * 0.85) continue;
-      const pads = sim.padsByTrip(S); const p = opts.far ? pads[pads.length - 1] : pads[0];
+      const pads = sim.padsByTrip(S); const p = opts.far ? pads[pads.length - 1] : pads[0]; // with no pads left the card upgrades instead
       if (sim.build(S, t, p && p.pad)) break;
     }
   }
@@ -86,7 +86,7 @@ assert.ok(n1.r.staff >= 3 && n1.r.staff <= 12, 'night 1 ends with a small crew, 
   near.buildings.push({ type: 'tank', level: 1, pad: nearPad }); far.buildings.push({ type: 'tank', level: 1, pad: farPad });
   const run = (c) => { const S = sim.newNight(c, { seed: 4 }); S.schedule = []; S.hiring = false; while (S.time < 60) { sim.step(S, DT); S.irritation = 0; S.bank = 0; S.events.length = 0; } return S.extracted; };
   const a = run(near), b = run(far); console.log('placement', { near: Math.round(a), far: Math.round(b) });
-  assert.ok(a > b * 1.1, 'a tank by the arm beats a tank in the far corner (staff unload at the nearest storage)');
+  assert.ok(a > b * 1.25, 'a tank by the arm beats a tank in the far corner (staff unload at the nearest tank)');
 }
 
 // ---------- the campaign boundary ----------
@@ -94,7 +94,9 @@ assert.ok(n1.r.staff >= 3 && n1.r.staff <= 12, 'night 1 ends with a small crew, 
   let camp = K.newCampaign(); const one = play(camp, { careful: true, handsOff: true }); camp = K.fold(camp, one.S, one.r);
   assert.strictEqual(camp.night, 2); assert.strictEqual(camp.workers.length, one.r.staff, 'the staff come back the next night');
   assert.strictEqual(camp.buildings.length, one.S.buildings.length - 1, 'every building comes back (the bottle cap is implicit)');
-  assert.ok(Math.abs(camp.bank - one.S.bank) < 1e-6, 'stored blood carries over');
+  assert.ok(Math.abs(camp.bank - (one.S.bank - one.r.clotted)) < 1e-6, 'stored blood carries over, less what clotted at dawn');
+  assert.ok(one.r.clotted > 0 && camp.unlocks.includes('refinery'), 'the first clot unlocks the refinery');
+  assert.strictEqual(camp.phase, 'day', 'dawn hands over to the day');
   assert.deepStrictEqual(camp.history[0].night, 1); assert.ok(camp.totals.extracted === one.r.extracted);
   const S2 = sim.newNight(camp, { seed: 9 });
   assert.strictEqual(S2.tut, null, 'night 2 has no tutorial'); assert.strictEqual(S2.shiftLen, K.nightLength(2)); assert.ok(K.nightLength(2) > K.nightLength(1));
@@ -130,5 +132,72 @@ assert.ok(n1.r.staff >= 3 && n1.r.staff <= 12, 'night 1 ends with a small crew, 
   assert.deepStrictEqual(K.fromSave(JSON.parse(JSON.stringify(m))), m, 'a migrated save round-trips');
   assert.strictEqual(K.migrateV1(null).archive, null, 'a new player has no archive');
   assert.notStrictEqual(K.V1_KEY, K.V2_KEY);
+}
+
+// ---------- phase 2: days, clotting, the refinery, the drip line, the floor ----------
+const staff = (n) => Array.from({ length: n }, (_, i) => ({ id: i + 1, name: `Staff ${i + 1}`, trait: 'Quiet', larvae: 50 }));
+const colony = (extra) => K.cleanCampaign(Object.assign({ night: 2, bank: 100, buildings: [{ type: 'tank', level: 1, pad: 1 }, { type: 'pool', level: 2, pad: 9 }], workers: staff(4), nextId: 5, hires: 4, unlocks: ['tank', 'pool', 'scatter'] }, extra || {}));
+const runNight = (S, secs, each) => { while (S.state === 'playing' && S.time < secs) { sim.step(S, DT); if (each) each(S); S.events.length = 0; } return S; };
+
+// clotting: raw blood loses a share at dawn, refined blood keeps; spending takes raw first
+{
+  const S = sim.newNight(colony(), { seed: 1 }); S.refined = 40; assert.strictEqual(sim.report(S).clotted, Math.round(60 * C.ECON.clotShare), 'only the raw part clots');
+  S.unlocked.push('refinery'); assert.ok(sim.build(S, 'refinery', 3)); assert.ok(Math.abs(S.refined - 30) < 1e-9 && Math.abs(S.bank - 30) < 1e-9, 'a 70 mL purchase from 60 raw + 40 refined takes all 60 raw before 10 refined');
+  const T = sim.newNight(colony({ buildings: [{ type: 'tank', level: 1, pad: 1 }, { type: 'pool', level: 2, pad: 9 }, { type: 'refinery', level: 1, pad: 3 }] }), { seed: 2 });
+  runNight(T, 30, (x) => { x.irritation = 0; }); assert.ok(T.refined > 30 && T.refined <= T.bank + 1e-9, 'the refinery refines stored blood through the night');
+  const D = sim.newNight(colony({ phase: 'day', buildings: [{ type: 'tank', level: 1, pad: 1 }, { type: 'refinery', level: 1, pad: 3 }] }), { day: true, seed: 2 }); runNight(D, 30); assert.strictEqual(D.refined, 0, 'nothing refines while the day has no clock');
+}
+
+// the day: no host, no bites, no clock; what is built in the day is there at night
+{
+  const camp = colony({ phase: 'day' }), D = sim.newNight(camp, { day: true, seed: 3 }); let denied = false;
+  D.hold = true; runNight(D, 20, (x) => { if (x.events.some((e) => e.type === 'deny' && e.what === 'day')) denied = true; });
+  assert.ok(denied, 'holding in the day explains that he is at work'); assert.strictEqual(D.extracted, 0); assert.strictEqual(D.state, 'playing', 'a day never ends on its own');
+  assert.strictEqual(D.workers.length, 4); assert.ok(D.workers.every((w) => w.st === 'wait'), 'staff stay home in the day');
+  assert.ok(sim.build(D, 'tank', 3), 'building works in the day');
+  const kept = K.foldDay(camp, D, false); assert.strictEqual(kept.phase, 'day'); assert.strictEqual(kept.night, 2, 'saving a day does not advance the night');
+  const dusk = K.foldDay(camp, D, true); assert.strictEqual(dusk.phase, 'night'); assert.ok(dusk.buildings.some((b) => b.type === 'tank' && b.pad === 3), 'the day build is in the night');
+  const N = sim.newNight(dusk, { seed: 3 }); assert.strictEqual(N.phase, 'night'); assert.ok(N.buildings.filter((b) => b.type === 'tank').length === 2);
+}
+
+// the drip line: after the roll to the foot, tanks by the arm are a long trip; the drip line fixes it and it shows
+{
+  const S = sim.newNight(colony({ workers: staff(6), buildings: [{ type: 'tank', level: 1, pad: 0 }, { type: 'pool', level: 2, pad: 9 }] }), { seed: 4 });
+  S.schedule = [{ at: 1, kind: 'roll' }]; runNight(S, 25, (x) => { x.irritation = 0; });
+  assert.strictEqual(S.site, 'foot'); assert.ok(sim.tripSeconds(S, sim.nearestStore(S)) > C.ECON.longTripSeconds, 'the foot is a long way from an arm-side tank');
+  assert.ok(S.unlocked.includes('drip'), 'long trips unlock the drip line');
+  const measure = (withDrip) => { const T = sim.newNight(colony({ workers: staff(6), buildings: [{ type: 'tank', level: 1, pad: 0 }, { type: 'pool', level: 2, pad: 9 }].concat(withDrip ? [{ type: 'drip', level: 1, pad: -1 }] : []) }), { seed: 5 }); T.schedule = []; T.hiring = false; runNight(T, 60, (x) => { x.irritation = 0; x.bank = 0; x.refined = 0; }); return T.extracted; };
+  const a = measure(true), b = measure(false); console.log('drip line', { with: Math.round(a), without: Math.round(b) }); assert.ok(a > b * 1.2, 'unloading at the bite is faster than flying to the tank');
+}
+
+// the floor: when the near floor is full, the window side is for sale; buying it opens four spots
+{
+  const S = sim.newNight(colony({ bank: 0 }), { seed: 6 }); S.bank = 1e5;
+  while (sim.freePads(S).length) { const p = sim.freePads(S)[0]; assert.ok(sim.build(S, 'tank', p)); }
+  sim.step(S, DT); assert.ok(S.unlocked.includes('floor'), 'a full floor unlocks Floor space'); const cheap = sim.cheapestUpgrade(S, 'tank'); assert.strictEqual(sim.costOf(S, 'tank'), sim.upgradeCost(cheap), 'with no floor left, the card upgrades the cheapest tank'); const lv = cheap.level; assert.ok(sim.build(S, 'tank')); assert.strictEqual(cheap.level, lv + 1);
+  assert.ok(sim.build(S, 'floor')); assert.deepStrictEqual(sim.freePads(S), C.ZONES[1].slice().sort((a, b) => a - b), 'the window side opens');
+  assert.strictEqual(sim.costOf(S, 'floor'), Infinity, 'the floor is bought once');
+  const back = K.cleanCampaign({ night: 3, buildings: [{ type: 'pool', level: 1, pad: C.ZONES[1][0] }] }); assert.strictEqual(back.zones, 2, 'a building on the window side means the floor was bought');
+}
+
+// a phase 1 save (no day, refined or zones yet) loads as a night with the near floor
+{
+  const old = { v: 2, settings: { muted: false, seenOpening: true }, campaign: { night: 3, bank: 120, buildings: [{ type: 'tank', level: 1, pad: 1 }, { type: 'pool', level: 1, pad: 3 }], workers: staff(3), nextId: 4, hires: 3, unlocks: ['tank', 'pool', 'scatter'], totals: { extracted: 900, nights: 2 }, history: [] }, archive: null };
+  const d = K.fromSave(old); assert.strictEqual(d.campaign.phase, 'night'); assert.strictEqual(d.campaign.zones, 1); assert.strictEqual(d.campaign.refined, 0); assert.strictEqual(d.campaign.bank, 120);
+  sim.newNight(d.campaign, { seed: 1 });
+}
+
+// four nights of a sensible player: the operation grows, and each night asks for something new
+{
+  let camp = K.newCampaign(); const firsts = [];
+  for (let n = 1; n <= 4; n++) {
+    if (camp.phase === 'day') { const D = sim.newNight(camp, { day: true, seed: 20 + n }); for (const t of ['refinery', 'tank', 'pool']) { const p = sim.padsByTrip(D)[0]; if (D.unlocked.includes(t) && p && sim.costOf(D, t) <= D.bank && D.buildings.filter((b) => b.type === t).length < (t === 'refinery' ? 1 : 9)) sim.build(D, t, p.pad); } camp = K.foldDay(camp, D, true); }
+    const before = camp.unlocks.slice(), x = play(camp, { careful: true, seed: 30 + n, buildOrder: ['tank', 'pool', 'refinery', 'rig', 'drip', 'floor'] });
+    firsts.push({ night: n, new: x.S.unlocked.filter((u) => !before.includes(u)), extracted: x.r.extracted, staff: x.r.staff, clotted: x.r.clotted, lost: x.r.lost.length });
+    camp = K.fold(camp, x.S, x.r);
+  }
+  console.log('campaign ', JSON.stringify(firsts));
+  assert.ok(firsts[3].extracted > firsts[0].extracted * 2, 'night 4 out-produces night 1 by a wide margin');
+  assert.ok(camp.unlocks.includes('refinery') && camp.unlocks.includes('rig'), 'clotting and crowding have both happened by night 4');
 }
 console.log('sim ok');

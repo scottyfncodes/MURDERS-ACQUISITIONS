@@ -32,6 +32,10 @@
     quotas: [300, 1000, 2100, 3400], maxLevel: 3,
     // the founder bites by hand: she holds 5 mL, drinks it in about 1.4 s, and itches him if she keeps going
     nestCap: 30, bellyMl: 5, drinkMlPerS: 3.6, greedIrritationPerS: 24, slotsBase: 3,
+    // raw blood does not keep: at dawn this share of whatever is unrefined has clotted; refined blood keeps
+    clotShare: 0.4, refineMlPerS: 1.6,
+    // the drip line unlocks once the round trip from the bite to storage runs past this many seconds
+    longTripSeconds: 2.8,
   };
   const PACE = [
     { id: 'cautious', label: 'Cautious', bite: 1.4, irritation: 0.5, morale: 0.10 },
@@ -45,13 +49,17 @@
     tank: { name: 'Storage tank', short: 'Tank', cost: 25, growth: 1.7, blurb: 'Holds blood until it is spent. Crews unload at the nearest storage.', effect: (l) => `Holds ${Math.round(120 * (1 + 0.75 * (l - 1)))} mL`, gain: '+120 mL storage', place: true },
     pool: { name: 'Breeding pool', short: 'Pool', cost: 20, growth: 2.1, blurb: 'Standing water. Hatches staff and houses them, technically.', effect: (l) => `Houses ${3 * l} staff`, gain: '+3 staff', place: true },
     rig: { name: 'Extraction rig', short: 'Rig', cost: 80, growth: 1.8, blurb: 'Bite stations on the subject. More staff on skin at once.', effect: (l) => `${3 + 3 * l} bite spots`, gain: '+3 bite spots', single: true, maxLevel: 5 },
-    refinery: { name: 'Refinery', short: 'Refinery', cost: 90, growth: 1.6, blurb: 'Turns raw blood into banked product you can spend.', effect: (l) => `${3 * l} refining stations`, gain: '+3 refiners' },
+    refinery: { name: 'Refinery', short: 'Refinery', cost: 70, growth: 1.9, blurb: 'Refines stored blood so it keeps overnight. Raw blood clots by morning.', effect: (l) => `Refines ${(1.6 * l).toFixed(1)} mL/s`, gain: 'Stops clotting', place: true },
+    drip: { name: 'Drip line', short: 'Drip', cost: 110, growth: 1, blurb: 'A funnel at the bite, piped straight to storage. Staff unload right where they drink.', effect: () => 'Unloads at the bite', gain: 'Shortest trips', single: true, maxLevel: 1 },
+    floor: { name: 'Floor space', short: 'Floor', cost: 60, growth: 1, blurb: 'The window side of the room, unclaimed. Four more places to build.', effect: () => '+4 build spots', gain: '+4 build spots', single: true, maxLevel: 1, expand: true },
     hatchery: { name: 'Hatchery', short: 'Hatchery', cost: 70, growth: 1.7, blurb: 'Nurses raise new hires here. Each hire costs banked blood.', effect: (l) => `${2 * l} nurse stations`, gain: '+2 nurses' },
   };
   // the cards a player can see, in order; refinery and hatchery return with the day phase
-  const BUILD_ORDER = ['tank', 'pool', 'rig'];
+  const BUILD_ORDER = ['tank', 'pool', 'refinery', 'rig', 'drip', 'floor'];
   // where Rhonda founded the company: a bottle cap under the bed, a short hop from the arm
   const NEST = [8.1, 3.3];
+  // the floor opens in zones: the near floor first, the window side when it runs out (indices into PADS)
+  const ZONES = [[0, 1, 2, 3, 6, 7, 9], [4, 5, 8, 10]];
 
   // pads on the bedroom floor, in the order they fill; [x, y] in diorama tiles
   const PADS = [[0.9, 8.6], [6.2, 7.6], [8.9, 7.4], [3.6, 8.9], [11.5, 7.8], [11.9, 0.5], [8.8, 9.7], [0.7, 6.4], [11.9, 5.3], [6.1, 9.9], [11.3, 9.8]];
@@ -109,6 +117,13 @@
     housingFull: 'Every pool is full. More pools, more staff.',
     rigNeed: 'The arm is crowded. Staff are waiting their turn. A rig fits more of us on.',
     alarmSoon: 'Twenty seconds to the alarm. Last call on the arm.',
+    dayStart: (n) => n === 1 ? 'He is at work until six. No clock, no hand. Build what we need, then call nightfall. — R.' : `Day ${n}. He left at 8:04. The building is ours until six. — R.`,
+    dayBite: 'He is at work. Nothing to bite until tonight.',
+    clotted: (ml) => `Overnight, ${ml} mL clotted in the tanks. Raw blood does not keep. A refinery would fix that. — R.`,
+    refineryBuilt: 'The refinery is running. Refined blood keeps. I am calling it "shelf-stable". — R.',
+    dripNeed: 'Staff are flying the long way to storage. A drip line at the bite would pipe it home.',
+    floorNeed: 'We are out of floor. The window side is unclaimed. For now.',
+    floorBought: 'The window side is ours. Nobody was using it. — R.',
     nightStart: (n, staff) => n === 2 ? `Night 2. ${staff ? `${staff} on payroll. ` : ''}Same arm, bigger plans. — R.` : `Night ${n}. ${staff} on payroll. Let's circle back to the arm. — R.`,
     idle: [
       'I have started calling the arm "the pipeline". — R.',
@@ -124,6 +139,7 @@
   // the first morning, and every morning after: what happened, and what tonight could be
   const MORNING = {
     headline: (r) => r.night === 1 ? `${r.extracted} mL. Not bad for one mosquito.` : r.lost.length ? 'We lost people last night.' : `${r.extracted} mL. ${r.staff} employees. One vision.`,
+    clot: (r) => r.clotted > 0 ? `${r.clotted} mL clotted overnight${r.refined ? `; ${r.refined} mL was refined and kept` : ''}.` : r.refined ? `${r.refined} mL refined. Nothing clotted.` : '',
     note: (r) => r.night === 1 ? (r.staff ? 'Last night it was just me. This morning we are a company. — R.' : 'Tonight we hire. Nobody builds an empire alone. — R.') : r.lost.length ? 'We keep going. It is what they would have wanted. Probably. — R.' : 'He has no idea. Let\'s keep it that way. — R.',
   };
 
@@ -204,9 +220,11 @@
     ['Staff', 'Breeding pools hatch employees. They bite and carry on their own, all night.'],
     ['Placement', 'You choose where things go. Storage close to the bite means shorter trips.'],
     ['Scatter', 'When the hand twitches, Scatter pulls everyone off the skin.'],
+    ['Clotting', 'Raw blood clots by morning. Refineries turn stored blood into blood that keeps.'],
+    ['Days', 'While he is at work there is no clock and no hand. Build, then call nightfall.'],
     ['Mornings', 'The colony keeps. Every night starts where the last one ended.'],
   ];
 
-  MA.config = { PALETTE, FEEL, ECON, PACE, BUILDINGS, BUILD_ORDER, NEST, PADS, SITES, POLICIES, SLEEPERS, HOST, FOUNDER, OPENING, NOTES, MORNING, FIRST, LAST, TRAITS, JOB_NAMES, MEMOS, RATINGS, RANKS, HANDBOOK, HANDBOOK_CORP };
+  MA.config = { PALETTE, FEEL, ECON, PACE, BUILDINGS, BUILD_ORDER, NEST, ZONES, PADS, SITES, POLICIES, SLEEPERS, HOST, FOUNDER, OPENING, NOTES, MORNING, FIRST, LAST, TRAITS, JOB_NAMES, MEMOS, RATINGS, RANKS, HANDBOOK, HANDBOOK_CORP };
   if (typeof module !== 'undefined') module.exports = MA;
 })(typeof window !== 'undefined' ? window : globalThis);

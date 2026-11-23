@@ -16,7 +16,12 @@ There is no build step and there are no dependencies.
   the bite means shorter trips. Tap a building to upgrade it.
 - **Breeding pools** hatch staff who bite and carry on their own.
 - **Scatter** (Space) pulls everyone off the skin when the hand moves.
-- Every night ends at the alarm. The colony, its staff and its stored blood carry over to the next night.
+- Every night ends at the alarm. At dawn, raw blood clots: a share of whatever is unrefined is lost.
+  **Refineries** turn stored blood into blood that keeps (the gold line under Stored).
+- **Days** have no clock and no host: he is at work. Build and upgrade, then tap **Nightfall** (N).
+- New cards appear when the operation hits a wall: a crowded arm (**Extraction rig**), long flights to storage after he
+  rolls over (**Drip line**), a full floor (**Floor space**). With no floor left, a card upgrades the cheapest building.
+- The colony, its staff and its stored blood carry over from night to night.
 - B holds the bite on a keyboard; P pauses, M mutes.
 
 ## Layout

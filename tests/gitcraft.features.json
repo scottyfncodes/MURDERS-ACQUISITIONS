@@ -157,8 +157,8 @@
    ]
   },
   {
-   "name": "the night ends in a morning, and the colony carries over",
-   "requirement": "finite nights; persistent colony",
+   "name": "the night ends in a morning, then an untimed day, and the colony carries over",
+   "requirement": "finite nights; untimed days; persistent colony",
    "steps": [
     {
      "press": "Enter"
@@ -188,11 +188,25 @@
      "name": "night 2"
     },
     {
+     "assert": "(document.getElementById('again').click(), true)",
+     "name": "start the day"
+    },
+    {
      "wait": 400
     },
     {
-     "assert": "window.__game.night === 2 && window.__game.buildings >= 5 && window.__game.workers >= 6",
-     "name": "night 2 starts with last night's colony"
+     "assert": "window.__game.phase === 'day' && window.__game.night === 2 && !document.getElementById('nightfall').hidden",
+     "name": "the day has no clock and a Nightfall button"
+    },
+    {
+     "press": "n"
+    },
+    {
+     "wait": 400
+    },
+    {
+     "assert": "window.__game.phase === 'night' && window.__game.state === 'playing' && window.__game.buildings >= 5 && window.__game.workers >= 6",
+     "name": "nightfall starts night 2 with last night's colony"
     }
    ]
   }

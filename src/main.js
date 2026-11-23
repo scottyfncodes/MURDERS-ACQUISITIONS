@@ -31,7 +31,7 @@
   // ---------- night lifecycle ----------
   function clockIn() {
     audio.start(); audio.play('click');
-    if (!save.settings.seenOpening && save.campaign.night === 1) startOpening(); else startNight();
+    if (!save.settings.seenOpening && save.campaign.night === 1) startOpening(); else if (save.campaign.phase === 'day') startDay(); else startNight();
   }
   function startOpening() {
     G.mode = 'opening'; G.cineT = 0; G.S = sim.newNight(save.campaign, {}); G.S.events.length = 0; G.cam = null;
@@ -42,17 +42,29 @@
     save.settings.seenOpening = true; store(); $('cine').hidden = true; document.body.classList.remove('is-cine');
     startNight(G.S);
   }
+  // the day: he is at work, nothing to bite, no clock. Build, then call nightfall
+  function startDay() {
+    G.S = sim.newNight(save.campaign, { day: true }); resetPlay(); document.body.classList.add('morning', 'is-day');
+    $('nightfall').hidden = false; $('recall').hidden = true; G.dayAt = performance.now() / 1000; renderPanel(); drainEvents(); updateHud(0, performance.now() / 1000);
+  }
+  function nightfall() {
+    if (!G.S || G.S.phase !== 'day') return; audio.play('click');
+    save.campaign = K.foldDay(save.campaign, G.S, true); store(); startNight();
+  }
+  function resetPlay() {
+    G.mode = 'play'; G.paused = false; G.selected = null; G.placing = null; G.acc = 0; G.memoQ = []; G.memoUntil = 0; G.shown = {}; G.cardsKey = ''; G.punch = null; G.slow = 0; G.idleAt = 0; G.hireAt = -99; G.flashCoach = null;
+    R.fx.parts.length = 0; R.fx.labels.length = 0; closeModal();
+    document.body.classList.remove('is-title', 'morning', 'is-cine', 'is-day'); $('hud').hidden = false; $('memo').hidden = true; $('nightfall').hidden = true; $('clock-out').hidden = G.S.phase === 'day';
+  }
   function startNight(S) {
     G.S = S || sim.newNight(save.campaign, {}); store();
-    G.mode = 'play'; G.paused = false; G.selected = null; G.placing = null; G.acc = 0; G.memoQ = []; G.memoUntil = 0; G.shown = {}; G.cardsKey = ''; G.punch = null; G.slow = 0; G.idleAt = 0; G.hireAt = -99;
-    R.fx.parts.length = 0; R.fx.labels.length = 0;
-    document.body.classList.remove('is-title', 'morning', 'is-cine'); $('hud').hidden = false; $('memo').hidden = true;
-    closeModal(); renderPanel(); drainEvents(); updateHud(0, performance.now() / 1000);
+    $('recall').hidden = !G.S.unlocked.includes('scatter');
+    resetPlay(); renderPanel(); drainEvents(); updateHud(0, performance.now() / 1000);
   }
-  function toTitle() { G.mode = 'title'; G.S = null; G.demo = makeDemo(); G.cam = null; closeModal(); document.body.classList.add('is-title'); document.body.classList.remove('morning', 'is-cine'); $('hud').hidden = true; $('cine').hidden = true; titleStatus(); }
+  function toTitle() { G.mode = 'title'; G.S = null; G.demo = makeDemo(); G.cam = null; closeModal(); document.body.classList.add('is-title'); document.body.classList.remove('morning', 'is-cine', 'is-day'); $('hud').hidden = true; $('cine').hidden = true; titleStatus(); }
   function titleStatus() {
     const c = save.campaign;
-    $('title-status').textContent = c.night === 1 && !c.workers.length ? 'Night 1 · Subject asleep since 11:42 PM' : `Night ${c.night} · ${c.workers.length} on payroll · ${fmt(c.bank)} mL stored`;
+    $('title-status').textContent = c.night === 1 && !c.workers.length ? 'Night 1 · Subject asleep since 11:42 PM' : c.phase === 'day' ? `Day ${c.night - 1} · He is at work · ${c.workers.length} on payroll` : `Night ${c.night} · ${c.workers.length} on payroll · ${fmt(c.bank)} mL stored`;
   }
 
   // ---------- the opening ----------
@@ -89,7 +101,7 @@
   const cards = {};
   function renderPanel() {
     const S = G.S, p = $('panel-build'); if (!S) return;
-    const types = C.BUILD_ORDER.filter((t) => S.unlocked.includes(t));
+    const types = visibleCards(S);
     p.hidden = types.length === 0; G.cardsKey = types.join(',') + '|' + (G.placing || '') + '|' + (G.selected || '');
     p.innerHTML = ''; for (const k in cards) delete cards[k];
     if (G.placing) {
@@ -100,7 +112,7 @@
     }
     const sb = G.selected && S.buildings.find((x) => x.id === G.selected);
     if (sb) {
-      const def = C.BUILDINGS[sb.type], cost = sim.upgradeCost(sb), extra = sb.type === 'tank' || sb.type === 'nest' ? ` · trip ${sim.tripSeconds(S, sb).toFixed(1)} s` : '';
+      const def = C.BUILDINGS[sb.type], cost = sim.upgradeCost(sb), extra = sb.type === 'tank' || sb.type === 'drip' ? ` · trip ${sim.tripSeconds(S, sb).toFixed(1)} s` : '';
       p.innerHTML = `<div class="inspector"><span><b>${def.name} · Lv ${sb.level}</b><small>${def.effect(sb.level)}${extra}. ${def.blurb}</small></span><button type="button" class="up" id="upgrade" ${cost === Infinity ? 'disabled' : ''}>${cost === Infinity ? 'Fully upgraded' : `Upgrade · ${fmt(cost)} mL`}</button><button type="button" class="x" id="deselect" aria-label="Close">×</button></div>`;
       $('upgrade').addEventListener('click', () => { sim.upgrade(S, sb.id); drainEvents(); renderPanel(); });
       $('deselect').addEventListener('click', () => { G.selected = null; audio.play('click'); renderPanel(); });
@@ -113,12 +125,15 @@
       b.addEventListener('click', () => pickCard(type)); p.append(b); cards[type] = b;
     });
     updateCards();
+    const neu = types.find((t) => fresh.has(t)); if (neu && cards[neu]) cards[neu].scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: R.fx.reduced ? 'auto' : 'smooth' });
   }
+  // a card goes away once there is nothing left to buy (the floor, the drip line)
+  function visibleCards(S) { return C.BUILD_ORDER.filter((t) => S.unlocked.includes(t) && !((C.BUILDINGS[t].expand || C.BUILDINGS[t].maxLevel === 1) && sim.costOf(S, t) === Infinity)); }
   function pickCard(type) {
     const S = G.S; if (!S || S.state !== 'playing') return; audio.start(); if (fresh.delete(type)) G.cardsKey = '';
     const cost = sim.costOf(S, type);
     if (!(cost <= S.bank)) { S.events.push({ type: 'deny', what: type, cost }); drainEvents(); return; }
-    if (C.BUILDINGS[type].single) { sim.build(S, type); drainEvents(); return; }
+    if (C.BUILDINGS[type].single || !sim.freePads(S).length) { sim.build(S, type); drainEvents(); renderPanel(); return; }
     audio.play('click'); G.selected = null; G.placing = type; renderPanel();
   }
   function placeAt(pad) { const S = G.S, type = G.placing; if (!S || !type) return; G.placing = null; sim.build(S, type, pad); drainEvents(); renderPanel(); }
@@ -127,7 +142,8 @@
     for (const type in cards) {
       const def = C.BUILDINGS[type], cost = sim.costOf(S, type), el = cards[type];
       const own = def.single ? (d.rigLevel ? `Lv ${d.rigLevel}` : 'new') : d.counts[type] ? `×${d.counts[type]}` : 'new';
-      const price = cost === Infinity ? (def.single ? `Max · ${own}` : `No room · ${own}`) : `${fmt(cost)} mL · ${own}`;
+      const up = !def.single && !sim.freePads(S).length && cost !== Infinity, price = cost === Infinity ? (def.single ? `Max · ${own}` : `Maxed · ${own}`) : up ? `Upgrade · ${fmt(cost)} mL` : `${fmt(cost)} mL · ${own}`;
+      const sub = up ? 'Upgrades the cheapest one' : def.gain; if (el._sub !== sub) { el._sub = sub; el.children[1].textContent = sub; }
       if (el._price !== price) { el._price = price; el.children[2].textContent = price; }
       el.classList.toggle('can', cost <= S.bank);
     }
@@ -159,7 +175,7 @@
   $('pause').addEventListener('click', () => setPaused(true)); $('resume').addEventListener('click', () => setPaused(false));
   $('mute').addEventListener('click', () => { save.settings.muted = !save.settings.muted; applyMute(); store(); });
   function applyMute() { audio.setMuted(save.settings.muted); $('mute').setAttribute('aria-pressed', String(save.settings.muted)); $('mute').setAttribute('aria-label', save.settings.muted ? 'Unmute sound' : 'Mute sound'); }
-  $('clock-in').addEventListener('click', clockIn); $('again').addEventListener('click', () => { audio.start(); audio.play('click'); startNight(); }); $('to-title').addEventListener('click', toTitle);
+  $('clock-in').addEventListener('click', clockIn); $('again').addEventListener('click', () => { audio.start(); audio.play('click'); startDay(); }); $('nightfall').addEventListener('click', nightfall); $('to-title').addEventListener('click', toTitle);
   $('skip').addEventListener('click', (e) => { e.stopPropagation(); audio.start(); endOpening(); });
   $('cine').addEventListener('pointerdown', () => { audio.start(); endOpening(); });
   $('open-handbook').addEventListener('click', () => { audio.start(); audio.play('click'); openModal('handbook'); }); $('pause-handbook').addEventListener('click', () => openModal('handbook'));
@@ -177,7 +193,8 @@
     if (k === 'p') setPaused(!G.paused);
     else if (k === 'b' && inPlay()) sim.setHold(G.S, true);
     else if (k === ' ') { e.preventDefault(); if (G.S && G.S.unlocked.includes('scatter')) $('recall').click(); }
-    else if (k >= '1' && k <= '3' && G.S) { const t = C.BUILD_ORDER.filter((x) => G.S.unlocked.includes(x))[Number(k) - 1]; if (t) pickCard(t); }
+    else if (k === 'n' && G.S && G.S.phase === 'day') nightfall();
+    else if (k >= '1' && k <= '6' && G.S) { const t = visibleCards(G.S)[Number(k) - 1]; if (t) pickCard(t); }
   });
   addEventListener('keyup', (e) => { if (e.key.toLowerCase() === 'b' && G.S) sim.setHold(G.S, false); });
   addEventListener('blur', () => { if (G.S) sim.setHold(G.S, false); G.press = null; });
@@ -185,6 +202,7 @@
 
   // ---------- events from the sim: every one answers on screen and in sound ----------
   function flash(id, cls) { const el = $(id); el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+  function saveDay() { if (G.S && G.S.phase === 'day') { save.campaign = K.foldDay(save.campaign, G.S, false); store(); } }
   function drainEvents() {
     const S = G.S; if (!S) return;
     for (const e of S.events) {
@@ -192,8 +210,9 @@
       switch (e.type) {
         case 'memo': if (e.tone === 'idle' && G.memoQ.length) break; if (e.tone === 'idle' || e.tone === 'info') G.memoQ.push(e); else { G.memoQ = [e]; G.memoUntil = 0; } break;
         case 'unlock': if (e.what === 'scatter') { $('recall').hidden = false; flash('recall', 'arrive'); } else { audio.play('hatch'); fresh.add(e.what); } G.cardsKey = ''; break;
-        case 'build': audio.play('coin'); setTimeout(() => audio.play('thud'), C.FEEL.build_drop_ms); flash('p-bank', 'pulse'); G.cardsKey = ''; break;
-        case 'deny': audio.play('deny'); if (e.what === 'recall') flash('recall', 'deny'); else if (e.what === 'full') { flash('p-bank', 'deny'); } else if (cards[e.what]) { const c = cards[e.what]; c.classList.remove('deny'); void c.offsetWidth; c.classList.add('deny'); flash('p-bank', 'deny'); } break;
+        case 'expand': audio.play('coin'); setTimeout(() => audio.play('thud'), C.FEEL.build_drop_ms); flash('p-bank', 'pulse'); G.cardsKey = ''; saveDay(); break;
+        case 'build': saveDay(); audio.play('coin'); setTimeout(() => audio.play('thud'), C.FEEL.build_drop_ms); flash('p-bank', 'pulse'); G.cardsKey = ''; break;
+        case 'deny': if (e.what === 'day') { G.flashCoach = { text: C.NOTES.dayBite, until: performance.now() / 1000 + 2.2 }; break; } audio.play('deny'); if (e.what === 'recall') flash('recall', 'deny'); else if (e.what === 'full') { flash('p-bank', 'deny'); } else if (cards[e.what]) { const c = cards[e.what]; c.classList.remove('deny'); void c.offsetWidth; c.classList.add('deny'); flash('p-bank', 'deny'); } break;
         case 'deliver': audio.play(e.founder ? 'plip' : 'plip', e.founder ? 0 : 0.09); if (e.first) audio.play('hatch'); if (e.founder) flash('p-bank', 'pulse'); break;
         case 'takeoff': audio.play('buzz', 0.2); break;
         case 'full': audio.play('click'); break;
@@ -222,8 +241,9 @@
     $('r-payroll').hidden = S.workers.length === 0;
     const list = $('r-lost-list'); list.innerHTML = ''; for (const w of r.lost) { const l = document.createElement('li'); l.textContent = `${w.name} `; const s = document.createElement('span'); s.textContent = `· ${w.trait} · supported ${w.larvae} larvae`; l.append(s); list.append(l); }
     $('r-memoriam').hidden = r.lost.length === 0;
+    const clot = C.MORNING.clot(r); $('r-clot').hidden = !clot; $('r-clot').textContent = clot;
     const plan = $('r-plan'); plan.innerHTML = ''; K.plan(save.campaign).forEach((t) => { const l = document.createElement('li'); l.textContent = t; plan.append(l); });
-    $('again').textContent = `NIGHT ${save.campaign.night}`; $('hud').hidden = true;
+    $('again').textContent = 'START THE DAY'; $('hud').hidden = true;
     openModal('review'); $('review').setAttribute('data-ready', '');
   }
 
@@ -234,7 +254,9 @@
   function coachText(S, now) {
     const f = S.founder, tut = S.tut, scatter = S.hev && !S.hev.hit && (S.hev.kind === 'swat' || S.hev.kind === 'scratch') && S.unlocked.includes('scatter');
     if (scatter && (S.hev.tutorial || S.night <= 2)) return ['Press SCATTER!', 'alarm'];
+    if (G.flashCoach && now < G.flashCoach.until) return [G.flashCoach.text, 'warn'];
     if (G.placing) return null;
+    if (S.phase === 'day') return S.night === 2 && now - G.dayAt < 9 ? ['No clock while he is at work. Build, then tap Nightfall.'] : null;
     if (f.st === 'drink' && f.belly >= C.ECON.bellyMl - 0.05) return ['Full. Let go to fly it home.', 'warn'];
     if (!tut) return null;
     const idle = f.st === 'home' && now - G.idleAt > 3.5;
@@ -253,14 +275,16 @@
     set('v-bank', fmt(Math.floor(G.bankShown))); set('v-cap', `/${fmt(d.cap)}`);
     const rate = Math.round(S.rate / 5) * 5; show('v-rate', rate > 0); if (rate > 0) set('v-rate', `+${rate} mL/min`);
     $('p-bank').classList.toggle('full', S.bank >= d.cap - 0.5);
-    set('v-clock', clock(S.shiftLen - S.sleepLost - S.time)); $('p-clock').classList.toggle('cut', S.shiftLen - S.sleepLost - S.time < 20);
+    if (S.phase === 'day') { set('l-clock', 'At work'); set('v-clock', `Day ${S.night - 1}`); }
+    else { set('l-clock', 'Alarm in'); set('v-clock', clock(S.shiftLen - S.sleepLost - S.time)); $('p-clock').classList.toggle('cut', S.shiftLen - S.sleepLost - S.time < 20); }
+    const hasRef = S.buildings.some((b) => b.type === 'refinery'); show('p-refined', hasRef); if (hasRef) { const w = Math.round((S.refined / Math.max(1, S.bank)) * 100); if (G.shown.rw !== w) { G.shown.rw = w; $('b-refined').style.width = w + '%'; $('p-refined').title = `${Math.floor(S.refined)} mL refined`; } }
     show('p-staff', S.hires > 0 || S.workers.length > 0); set('v-staff', String(S.workers.length)); set('v-housing', `/${d.housing}`);
-    show('p-irr', S.unlocked.includes('scatter')); const ip = S.irritation | 0; if (G.shown.ip !== ip) { G.shown.ip = ip; $('b-irr').style.width = ip + '%'; }
+    show('p-irr', S.unlocked.includes('scatter') && S.phase !== 'day'); const ip = S.irritation | 0; if (G.shown.ip !== ip) { G.shown.ip = ip; $('b-irr').style.width = ip + '%'; }
     const rc = $('recall'), cd = S.recallCd > 0; rc.classList.toggle('cooling', cd); rc.style.setProperty('--cd', cd ? `${(S.recallCd / (C.FEEL.recall_cooldown_s * S.mods.recallCd)) * 100}%` : '0%');
     if (!(S.hev && !S.hev.hit && (S.hev.kind === 'swat' || S.hev.kind === 'scratch'))) rc.classList.remove('alarm');
     const ct = coachText(S, now), coach = $('coach'), txt = ct ? ct[0] : '';
     if (G.shown.coach !== txt) { G.shown.coach = txt; coach.hidden = !ct; if (ct) { coach.textContent = txt; coach.className = `coach ${ct[1] || ''}`; flash('coach', 'arrive'); } }
-    const key = C.BUILD_ORDER.filter((t) => S.unlocked.includes(t)).join(',') + '|' + (G.placing || '') + '|' + (G.selected || '');
+    const key = visibleCards(S).join(',') + '|' + (G.placing || '') + '|' + (G.selected || '');
     if (key !== G.cardsKey) renderPanel();
     if (now - G.uiAt > 0.2) { G.uiAt = now; if (!G.placing && !G.selected) updateCards(); const up = $('upgrade'); if (up && G.selected) { const b = S.buildings.find((x) => x.id === G.selected); if (b) up.classList.toggle('can', sim.upgradeCost(b) <= S.bank); } }
     if (f.st === 'drink' && f.belly < C.ECON.bellyMl - 0.05) audio.play('slurp', 0.3);
@@ -271,7 +295,7 @@
 
   // ---------- camera: tight on the founder at first, opening up as the colony grows ----------
   function playCam(S) {
-    if (G.placing || !S) return { f: [6.8, 6.2, 0.6], z: 1, k: 0 };
+    if (G.placing || !S || S.phase === 'day') return { f: [6.8, 6.2, 0.6], z: 1, k: 0 };
     const n = S.buildings.length - 1 + Math.min(S.workers.length, 6) * 0.25;
     // a phone needs the close-up to read one mosquito; a wide screen already shows her at a readable size
     const narrow = Math.max(0, Math.min(1, (760 - stageRect().width) / 340));
@@ -323,7 +347,7 @@
   // ---------- measurement hooks (PLAYCRAFT, the shot list, the feature checks) ----------
   const fxName = (S) => (S && S.hev && S.hev.kind === 'swat' ? (S.hev.hit ? 'swat-impact' : 'swat-warning') : S && S.hev ? S.hev.kind : null);
   window.__game = {
-    get state() { return G.mode === 'title' ? 'title' : G.mode === 'opening' ? 'opening' : G.S.state; }, get paused() { return G.paused; }, get score() { return G.S ? Math.round(G.S.extracted) : 0; }, get time() { return G.S ? G.S.time : 0; },
+    get state() { return G.mode === 'title' ? 'title' : G.mode === 'opening' ? 'opening' : G.S.state; }, get phase() { return G.S ? G.S.phase : save.campaign.phase; }, get refined() { return G.S ? Math.floor(G.S.refined) : 0; }, get zones() { return G.S ? G.S.zones : save.campaign.zones; }, get paused() { return G.paused; }, get score() { return G.S ? Math.round(G.S.extracted) : 0; }, get time() { return G.S ? G.S.time : 0; },
     get bank() { return G.S ? Math.floor(G.S.bank) : 0; }, get workers() { return G.S ? G.S.workers.length : 0; }, get buildings() { return G.S ? G.S.buildings.length - 1 : 0; }, get casualties() { return G.S ? G.S.lost.length : 0; },
     get irritation() { return G.S ? G.S.irritation : 0; }, get night() { return G.S ? G.S.night : save.campaign.night; }, get founder() { return G.S ? G.S.founder.st : null; }, get belly() { return G.S ? G.S.founder.belly : 0; },
     get step() { return G.S && G.S.tut ? G.S.tut.step : null; }, get placing() { return G.placing; }, get unlocked() { return G.S ? G.S.unlocked.slice() : []; }, get sleepLeft() { return G.S ? G.S.shiftLen - G.S.sleepLost - G.S.time : 0; }, get fx() { return fxName(G.S); }, get cine() { return G.mode === 'opening' ? G.cineT : null; },

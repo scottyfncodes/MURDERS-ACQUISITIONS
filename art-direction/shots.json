@@ -173,6 +173,32 @@
    }
   },
   {
+   "id": "day",
+   "name": "A day: he is at work",
+   "kind": "screen",
+   "steps": [
+    {
+     "selector": "#clock-in"
+    },
+    {
+     "selector": "#skip"
+    },
+    {
+     "eval": "window.__game.debug.preset('mid')"
+    },
+    {
+     "eval": "window.__game.debug.trigger('wake')"
+    },
+    {
+     "selector": "#again"
+    }
+   ],
+   "wait_for": {
+    "js": "window.__game.phase === 'day'",
+    "timeout_ms": 15000
+   }
+  },
+  {
    "id": "handbook",
    "name": "Employee handbook",
    "kind": "screen",
