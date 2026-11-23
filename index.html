@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>MURDERS &amp; ACQUISITIONS</title>
-  <meta name="description" content="MURDERS &amp; ACQUISITIONS by HaveAnApp. Run a mosquito blood plant under a sleeping human for one night shift.">
+  <meta name="description" content="MURDERS &amp; ACQUISITIONS by HaveAnApp. One mosquito, one sleeping human, and a blood empire built one bite at a time.">
   <meta name="author" content="HaveAnApp">
   <link rel="icon" href="assets/icons/icon.svg" type="image/svg+xml">
   <link rel="icon" href="assets/icons/favicon.ico" sizes="48x48">
@@ -26,7 +26,7 @@
 
   <main class="title" id="title">
     <header class="title-head">
-      <p class="eyebrow">Night shift · Plant No. 1</p>
+      <p class="eyebrow">A bedroom · 11:42 PM</p>
       <h1 aria-label="MURDERS & ACQUISITIONS"><b>MURDERS</b><span>&amp; ACQUISITIONS</span></h1>
       <p class="tag">“We’re all just trying to make a living.”</p>
     </header>
@@ -34,7 +34,7 @@
     <nav class="title-acts" aria-label="Main menu">
       <button class="btn-go" id="clock-in" type="button">CLOCK IN</button>
       <button class="btn-sec" id="open-handbook" type="button">Employee handbook</button>
-      <button class="btn-sec" id="open-reviews" type="button">Performance reviews</button>
+      <button class="btn-sec" id="open-reviews" type="button">Company records</button>
       <div class="title-foot">
         <span id="title-status">Shift 1 · Subject asleep since 11:42 PM</span>
         <p class="haveanapp-byline" data-haveanapp><a class="haveanapp-byline__by" href="https://haveanapp.com" rel="noopener" target="_blank">by HaveAnApp</a></p>
@@ -42,42 +42,29 @@
     </nav>
   </main>
 
+  <div class="cine" id="cine" hidden>
+    <p class="cine-cap" id="cine-cap" aria-live="polite"><b id="cine-time"></b><span id="cine-line"></span></p>
+    <button class="cine-skip" id="skip" type="button">Skip</button>
+  </div>
+
   <div class="hud" id="hud" hidden>
-    <div class="hud-top" role="status" aria-label="Shift status">
-      <div class="plate" id="p-bank"><small>Banked</small><strong><span id="v-bank">0</span><i> mL</i></strong></div>
-      <div class="plate wide" id="p-quota"><small id="l-quota">Q1 quota</small><div class="bar"><i id="b-quota"></i></div></div>
-      <div class="plate" id="p-clock"><small>Sleep left</small><strong id="v-clock">5:00</strong></div>
-      <div class="plate" id="p-staff"><small>Staff</small><strong><span id="v-staff">5</span><i id="v-housing">/8</i></strong></div>
-      <div class="plate" id="p-lost"><small>Lost</small><strong id="v-lost">0</strong></div>
-      <div class="plate wide" id="p-irr"><small>Irritation</small><div class="bar irr"><i id="b-irr"></i><u></u></div></div>
+    <div class="hud-top" role="status" aria-label="Night status">
+      <div class="plate" id="p-bank"><small>Stored</small><strong><span id="v-bank">0</span><i id="v-cap">/30</i></strong><em id="v-rate" hidden></em></div>
+      <div class="plate" id="p-clock"><small>Alarm in</small><strong id="v-clock">2:40</strong></div>
+      <div class="plate" id="p-staff" hidden><small>Staff</small><strong><span id="v-staff">0</span><i id="v-housing">/3</i></strong></div>
+      <div class="plate" id="p-irr" hidden><small>Itch</small><div class="bar irr"><i id="b-irr"></i><u></u></div></div>
     </div>
     <div class="stage" id="stage"></div>
     <div class="dock">
-      <div class="memo" id="memo" aria-live="polite"><img src="assets/icons/favicon-32.png" alt="" width="28" height="28"><p><b>Memo from the plant manager</b><span id="memo-text"></span></p></div>
+      <p class="coach" id="coach" role="status" hidden></p>
+      <div class="memo" id="memo" aria-live="polite" hidden><p><b>Sticky note from Rhonda</b><span id="memo-text"></span></p></div>
       <div class="actions">
-        <div class="pace" role="group" aria-label="Extraction pace">
-          <button type="button" id="pace-0" aria-pressed="false">Cautious</button>
-          <button type="button" id="pace-1" aria-pressed="true">Standard</button>
-          <button type="button" id="pace-2" aria-pressed="false">Aggressive</button>
-        </div>
-        <button type="button" class="recall" id="recall">ALL HANDS BACK</button>
-      </div>
-      <div class="tabs" role="tablist">
-        <button type="button" role="tab" id="tab-build" aria-selected="true" aria-controls="panel-build">Build</button>
-        <button type="button" role="tab" id="tab-staff" aria-selected="false" aria-controls="panel-staff">Staff</button>
-        <button type="button" role="tab" id="tab-roster" aria-selected="false" aria-controls="panel-roster">Roster</button>
-        <span class="tabs-gap"></span>
+        <button type="button" class="recall" id="recall" hidden>SCATTER</button>
+        <span class="gap"></span>
         <button type="button" class="icon-btn" id="mute" aria-label="Mute sound" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path class="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="cross" d="M16 9l5 6M21 9l-5 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
         <button type="button" class="icon-btn" id="pause" aria-label="Pause"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button>
       </div>
-      <div class="panel" id="panel-build" role="tabpanel"></div>
-      <div class="panel" id="panel-staff" role="tabpanel" hidden>
-        <div class="stepper"><span><b>Refining</b><small id="s-refine-cap">2 of 3 stations</small></span><button type="button" id="refine-less" aria-label="Fewer refiners">−</button><output id="s-refine">2</output><button type="button" id="refine-more" aria-label="More refiners">+</button></div>
-        <div class="stepper"><span><b>Hatchery</b><small id="s-hatch-cap">No hatchery yet</small></span><button type="button" id="hatch-less" aria-label="Fewer nurses">−</button><output id="s-hatch">0</output><button type="button" id="hatch-more" aria-label="More nurses">+</button></div>
-        <div class="staff-info"><span><b>Extraction</b><small id="s-extract">3 staff · 4 bite stations</small></span><span><b>Morale</b><small id="s-morale">70%</small></span></div>
-        <button type="button" class="toggle" id="hiring" aria-pressed="true">Hiring: on</button>
-      </div>
-      <div class="panel" id="panel-roster" role="tabpanel" hidden><ul id="roster"></ul></div>
+      <div class="panel" id="panel-build" hidden></div>
     </div>
   </div>
 
@@ -88,47 +75,49 @@
   </div>
 
   <div class="modal" id="pause-menu" role="dialog" aria-modal="true" aria-labelledby="pause-h" hidden>
-    <div class="sheet narrow"><h2 id="pause-h">On break</h2><p class="sub">The subject is still asleep. The clock is stopped.</p>
+    <div class="sheet narrow"><h2 id="pause-h">On break</h2><p class="sub">He is still asleep. The clock is stopped.</p>
       <button class="btn-go" id="resume" type="button">BACK TO WORK</button>
       <button class="btn-sec" id="pause-handbook" type="button">Employee handbook</button>
-      <button class="btn-sec" id="clock-out" type="button">Clock out early</button>
+      <button class="btn-sec" id="clock-out" type="button">Call it a night</button>
       <p class="haveanapp-byline" data-haveanapp>MURDERS &amp; ACQUISITIONS <a class="haveanapp-byline__by" href="https://haveanapp.com" rel="noopener" target="_blank">by HaveAnApp</a></p>
     </div>
   </div>
 
   <div class="modal" id="handbook" role="dialog" aria-modal="true" aria-labelledby="handbook-h" hidden>
-    <div class="sheet"><div class="letterhead" aria-hidden="true"></div><h2 id="handbook-h">Employee handbook</h2><p class="sub">Form 1-A. Please initial each section.</p><ol id="handbook-list"></ol><button class="btn-go" id="close-handbook" type="button">UNDERSTOOD</button></div>
+    <div class="sheet"><h2 id="handbook-h">Employee handbook</h2><p class="sub">Handwritten by Rhonda on the back of a receipt. Please initial each section.</p><ol id="handbook-list"></ol><button class="btn-go" id="close-handbook" type="button">UNDERSTOOD</button></div>
   </div>
 
   <div class="modal" id="reviews" role="dialog" aria-modal="true" aria-labelledby="reviews-h" hidden>
-    <div class="sheet"><div class="letterhead" aria-hidden="true"></div><h2 id="reviews-h">Performance reviews</h2><p class="sub" id="reviews-sub">Your file is empty. Clock in to start one.</p><ul id="reviews-list"></ul><button class="btn-go" id="close-reviews" type="button">CLOSE FILE</button></div>
+    <div class="sheet"><h2 id="reviews-h">Company records</h2><p class="sub" id="reviews-sub">The company has no records yet. Clock in to start one.</p><ul class="records" id="reviews-list"></ul>
+      <div class="archive" id="archive" hidden><h3>Previous employer · Plant No. 1</h3><p class="sub" id="archive-sub"></p><ul class="records" id="archive-list"></ul></div>
+      <button class="btn-go" id="close-reviews" type="button">CLOSE FILE</button></div>
   </div>
 
   <div class="modal review" id="review" role="dialog" aria-modal="true" aria-labelledby="review-h" hidden>
     <div class="sheet">
-      <div class="letterhead" aria-hidden="true"></div>
-      <p class="eyebrow" id="review-eyebrow">Shift 1 · Performance review</p>
-      <h2 id="review-h">Meets Expectations</h2>
-      <p class="sub" id="review-remark"></p>
+      <p class="eyebrow" id="review-eyebrow">Night 1 · 6:30 AM</p>
+      <h2 id="review-h"></h2>
+      <p class="sticky" id="review-note"></p>
       <dl class="review-grid">
-        <div><dt>Blood extracted</dt><dd id="r-extracted">0 mL</dd></div>
-        <div><dt>Supply harvested</dt><dd id="r-pct">0%</dd></div>
-        <div><dt>Efficiency</dt><dd id="r-eff">0%</dd></div>
-        <div><dt>Staff lost</dt><dd id="r-lost">0</dd></div>
-        <div><dt>Quotas met</dt><dd id="r-quotas">0 of 4</dd></div>
-        <div><dt>Overall</dt><dd id="r-score">0</dd></div>
+        <div><dt>Collected</dt><dd id="r-extracted">0 mL</dd></div>
+        <div><dt>By hand</dt><dd id="r-manual">0 mL</dd></div>
+        <div><dt>By staff</dt><dd id="r-auto">0 mL</dd></div>
+        <div><dt>Stored</dt><dd id="r-banked">0 mL</dd></div>
+        <div><dt>Staff</dt><dd id="r-staff">0</dd></div>
+        <div><dt>Lost</dt><dd id="r-lost">0</dd></div>
       </dl>
-      <p class="best" id="r-best"></p>
-      <p class="career" id="r-career"></p>
+      <div class="payroll" id="r-payroll" hidden><h3>On payroll</h3><p id="r-staff-list"></p></div>
       <div class="memoriam" id="r-memoriam" hidden><h3>In memoriam</h3><ul id="r-lost-list"></ul></div>
-      <button class="btn-go" id="again" type="button">CLOCK IN AGAIN</button>
-      <button class="btn-sec" id="to-title" type="button">Back to the gate</button>
+      <div class="plan"><h3>Tonight</h3><ul id="r-plan"></ul></div>
+      <button class="btn-go" id="again" type="button">NIGHT 2</button>
+      <button class="btn-sec" id="to-title" type="button">Back to the title</button>
     </div>
   </div>
 
   <p class="error" id="error" role="alert" hidden></p>
   <noscript><p class="error">MURDERS &amp; ACQUISITIONS needs JavaScript to run the plant.</p></noscript>
   <script src="src/config.js"></script>
+  <script src="src/campaign.js"></script>
   <script src="src/sim.js"></script>
   <script src="src/render.js"></script>
   <script src="src/audio.js"></script>

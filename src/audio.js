@@ -49,6 +49,8 @@
     whistle: () => { tone({ f: 1800, to: 2400, d: 0.18, type: 'sine', v: 0.14 }); tone({ f: 2400, to: 1700, d: 0.22, type: 'sine', v: 0.14, at: 0.18 }); },
     alarm: () => { for (let i = 0; i < 6; i++) tone({ f: i % 2 ? 880 : 1100, d: 0.14, type: 'square', v: 0.09, at: i * 0.18 }); },
     stamp: () => tone({ f: 90, to: 45, d: 0.22, type: 'sine', v: 0.5 }),
+    buzz: () => { tone({ f: 210, to: 260, d: 0.22, type: 'sawtooth', v: 0.035 }); tone({ f: 420, to: 520, d: 0.22, type: 'triangle', v: 0.03 }); },
+    slurp: () => tone({ f: 330 + Math.random() * 60, to: 180, d: 0.16, type: 'sine', v: 0.07 }),
   };
   function play(name, minGap) {
     if (!A.ctx || A.muted) return;
