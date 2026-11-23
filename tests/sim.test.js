@@ -18,8 +18,9 @@ function play(camp, opts) {
       else if (f.st === 'drink') S.hold = opts.greedy ? true : f.greed < 0.25;
       else if (f.st === 'toSkin') S.hold = true; else { S.hold = false; rest = 0; }
       if (opts.handsOff && S.workers.length >= 2) S.hold = false;
+      if (S.unlocked.includes('push') && opts.push) { const want = opts.push === 'always' || (opts.push === 'timed' && S.depth > 0.55); if ((S.pace === 2) !== want) sim.setPush(S, want); }
     }
-    sim.step(S, DT);
+    sim.step(S, DT); if (opts.drain) { S.bank = 0; S.refined = 0; }
     for (const e of S.events) {
       if (e.type === 'deliver' && e.founder && log.firstDeposit === null) log.firstDeposit = S.time;
       if (e.type === 'deliver' && !e.founder && log.firstAuto === null) log.firstAuto = S.time;
@@ -199,5 +200,54 @@ const runNight = (S, secs, each) => { while (S.state === 'playing' && S.time < s
   console.log('campaign ', JSON.stringify(firsts));
   assert.ok(firsts[3].extracted > firsts[0].extracted * 2, 'night 4 out-produces night 1 by a wide margin');
   assert.ok(camp.unlocks.includes('refinery') && camp.unlocks.includes('rig'), 'clotting and crowding have both happened by night 4');
+}
+
+// ---------- phase 3a: his sleep rhythm, Push, suspicion and countermeasures ----------
+// the rhythm: from night 2 his sleep comes in waves; night 1 stays simple
+{
+  const one = sim.newNight(K.newCampaign(), { seed: 1 }); runNight(one, 60); assert.strictEqual(one.depth, 1, 'night 1 has no rhythm');
+  const S = sim.newNight(colony(), { seed: 1 }); let lo = 1, hi = 0; runNight(S, 90, (x) => { lo = Math.min(lo, x.depth); hi = Math.max(hi, x.depth); x.irritation = 0; });
+  assert.ok(lo < 0.2 && hi > 0.9, 'night 2 swings between deep and light sleep'); assert.ok(S.unlocked.includes('push'), 'Push arrives with the rhythm');
+}
+// Push: timed to deep sleep it beats never pushing on blood and beats always pushing on safety
+{
+  const camp = colony({ workers: staff(8), buildings: [{ type: 'tank', level: 2, pad: 1 }, { type: 'pool', level: 3, pad: 9 }, { type: 'rig', level: 1, pad: -1 }] });
+  const res = {}; for (const push of ['never', 'timed', 'always']) { let ml = 0, ev = 0, lost = 0; for (let seed = 1; seed <= 6; seed++) { const x = play(camp, { careful: true, seed, push, noBuild: true, drain: true }); ml += x.r.extracted; ev += x.r.scratches + x.r.swats; lost += x.r.lost.length; } res[push] = { ml, ev, lost }; }
+  console.log('push     ', JSON.stringify(res));
+  assert.ok(res.timed.ml > res.never.ml * 1.05, 'pushing in deep sleep collects more than never pushing');
+  assert.ok(res.timed.ev < res.always.ev, 'pushing only in deep sleep provokes the hand less than pushing all night');
+}
+// suspicion: bites and disturbances add up across nights; he buys a fan, then a repellent, one per morning
+{
+  const S = sim.newNight(colony(), { seed: 2 }); S.stats.loads = 100; S.suspicion = 9; const r = sim.report(S);
+  assert.strictEqual(r.suspicion, Math.round(C.ECON.suspicionPerSqrtLoad * 10 + 9), 'suspicion = bites (diminishing) + disturbances');
+  let camp = colony({ suspicion: 32 }); camp = K.fold(camp, S, Object.assign(r, { suspicion: 10 }));
+  assert.ok(camp.counters.fan && camp.newCounter === 'fan' && camp.unlocks.includes('windbreak'), 'crossing 40% buys the fan and offers the windbreak');
+  assert.strictEqual(camp.suspicion, 42 - C.ECON.suspicionDailyForget, 'he forgets some of it during the day');
+  const big = K.fold(colony({ suspicion: 90 }), S, Object.assign(sim.report(S), { suspicion: 10 }));
+  assert.ok(big.counters.fan && !big.counters.repellent, 'never more than one new countermeasure a morning');
+  const day = sim.newNight(camp, { day: true, seed: 2 }); assert.ok(day.events.some((e) => e.type === 'memo' && e.text === C.NOTES.counter.fan), 'the day opens on what he bought');
+  assert.deepStrictEqual(K.fromSave(JSON.parse(JSON.stringify({ v: 2, settings: {}, campaign: camp }))).campaign, camp, 'suspicion and countermeasures are saved');
+  assert.strictEqual(K.foldDay(camp, day, true).newCounter, null, 'the news is cleared at nightfall');
+}
+// each countermeasure hurts until it is answered
+{
+  const base = { workers: staff(6), buildings: [{ type: 'tank', level: 1, pad: 1 }, { type: 'pool', level: 2, pad: 9 }] };
+  const rate = (extra) => { const T = sim.newNight(colony(Object.assign({}, base, extra)), { seed: 8 }); T.schedule = []; T.hiring = false; T.rhythm = false; runNight(T, 60, (x) => { x.irritation = 0; x.bank = 0; x.refined = 0; }); return T.extracted; };
+  const clean = rate({}), fan = rate({ counters: { fan: true } }), braced = rate({ counters: { fan: true }, buildings: base.buildings.concat([{ type: 'windbreak', level: 1, pad: -1 }]) });
+  const rep = rate({ counters: { fan: true, repellent: true }, buildings: base.buildings.concat([{ type: 'windbreak', level: 1, pad: -1 }]) }), masked = rate({ counters: { fan: true, repellent: true }, buildings: base.buildings.concat([{ type: 'windbreak', level: 1, pad: -1 }, { type: 'masks', level: 1, pad: -1 }]) });
+  console.log('counters ', JSON.stringify({ clean: Math.round(clean), fan: Math.round(fan), windbreak: Math.round(braced), repellent: Math.round(rep), masks: Math.round(masked) }));
+  assert.ok(fan < clean * 0.9, 'the fan slows the line'); assert.ok(Math.abs(braced - clean) < clean * 0.05, 'the windbreak cancels it');
+  assert.ok(rep < braced * 0.9, 'the repellent slows the line'); assert.ok(Math.abs(masked - clean) < clean * 0.05, 'gas masks cancel it');
+  const S = sim.newNight(colony({ counters: { fan: true } }), { seed: 1 }); S.bank = 200; assert.ok(sim.build(S, 'windbreak')); assert.strictEqual(sim.windFactor(S), 1); assert.ok(S.events.some((e) => e.type === 'memo' && e.text === C.NOTES.answered.windbreak));
+}
+// six nights: a reckless player draws countermeasures sooner than a careful one, and nobody is ever locked out
+{
+  const run = (push, careful) => { let camp = K.newCampaign(); const log = []; for (let n = 1; n <= 6; n++) { if (camp.phase === 'day') { const D = sim.newNight(camp, { day: true, seed: 50 + n }); for (const t of ['windbreak', 'masks', 'refinery', 'tank', 'pool']) { const p = sim.padsByTrip(D)[0]; if (D.unlocked.includes(t) && sim.costOf(D, t) <= D.bank && (t !== 'refinery' || !D.buildings.some((b) => b.type === t))) sim.build(D, t, p && p.pad); } camp = K.foldDay(camp, D, true); } const x = play(camp, { careful, seed: 60 + n, push, buildOrder: ['windbreak', 'masks', 'tank', 'pool', 'refinery', 'rig', 'drip', 'floor'] }); camp = K.fold(camp, x.S, x.r); log.push({ n, ml: x.r.extracted, lost: x.r.lost.length, sus: Math.round(camp.suspicion), counters: Object.keys(camp.counters).join('+') }); } return { camp, log }; };
+  const careful = run('timed', true), reckless = run('always', false);
+  console.log('careful  ', JSON.stringify(careful.log)); console.log('reckless ', JSON.stringify(reckless.log));
+  const firstFan = (L) => { const i = L.findIndex((x) => x.counters.includes('fan')); return i < 0 ? 99 : i; };
+  assert.ok(firstFan(reckless.log) < firstFan(careful.log), 'pushing all night and ignoring the hand brings the fan sooner');
+  assert.ok(careful.log[5].ml > careful.log[0].ml * 1.5, 'a careful colony is still growing by night 6');
 }
 console.log('sim ok');

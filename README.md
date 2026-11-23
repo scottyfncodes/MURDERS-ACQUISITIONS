@@ -16,6 +16,11 @@ There is no build step and there are no dependencies.
   the bite means shorter trips. Tap a building to upgrade it.
 - **Breeding pools** hatch staff who bite and carry on their own.
 - **Scatter** (Space) pulls everyone off the skin when the hand moves.
+- From night 2 he **sleeps in waves**. **Push** (F) while he is deep under: bites are twice as fast and so is the itch.
+  **Ease off** when he goes light, or the hand comes.
+- **Suspicion** builds from bites, scratches, swats and, most of all, squashed staff. Past a point he buys things:
+  a **fan** (every flight slower; answered by a **Windbreak**), then a **repellent** (bites slower; answered by **Gas masks**).
+  He forgets some of it each day.
 - Every night ends at the alarm. At dawn, raw blood clots: a share of whatever is unrefined is lost.
   **Refineries** turn stored blood into blood that keeps (the gold line under Stored).
 - **Days** have no clock and no host: he is at work. Build and upgrade, then tap **Nightfall** (N).
