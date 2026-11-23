@@ -1,7 +1,7 @@
 // The isometric bedroom diorama: draws a shift's state. World point (7, 6.5, 0) lands on (view.cx, view.cy); view.s = px per tile.
 (function (root) {
   const MA = (root.MA = root.MA || {});
-  const C = MA.config, pal = C.PALETTE, { PADS, SITES, FEEL, NEST } = C;
+  const C = MA.config, pal = C.PALETTE, { PADS, SITES, FEEL, NEST, ZONES } = C;
   const FONT_D = "'Alfa Slab One', Rockwell, serif", FONT_B = "Archivo, system-ui, sans-serif";
 
   function shade(hex, f) {
@@ -43,6 +43,7 @@
       }
     } else if (e.type === 'quotaMet') fx.flare = 1;
     else if (e.type === 'wake') label('6:30 AM', pal.accent, [11.0, 0.5, 3.4], 2.6, true);
+    else if (e.type === 'expand') { (ZONES[e.zone] || []).forEach((i, k) => { const p = PADS[i]; fx.parts.push({ kind: 'ring', x: p[0] + 1, y: p[1] + 0.9, z: 0, t: -k * 0.12, life: 0.7 }); }); }
     else if (e.type === 'hatch') {
       fx.parts.push({ kind: 'pop', x: e.at[0], y: e.at[1], z: 1.0, t: 0, life: 0.6, big: true });
       if (e.first) { label('EMPLOYEE #1', pal.primary, [e.at[0], e.at[1], 2.6], 2.8, true); label(e.w.name, pal.text, [e.at[0], e.at[1], 1.75], 2.8); fx.flare = 1; }
@@ -94,17 +95,17 @@
     };
 
     const cine = opt.cine ? opt.cine.t : null, phoneLit = cine === null ? 0 : clamp((6.2 - cine) / 1.6, 0, 1);
-    const waking = S.state === 'waking' || S.state === 'over', wk = waking ? clamp(S.wakeT / 3, 0, 1) : 0;
+    const away = S.phase === 'day', waking = S.state === 'waking' || S.state === 'over', wk = waking ? clamp(S.wakeT / 3, 0, 1) : 0;
     const breath = fx.reduced ? 0 : Math.sin(t * Math.PI / 2) * 0.05;
     const stirring = S.hev && (S.hev.kind === 'roll' || S.hev.kind === 'stir') ? Math.sin(S.hev.t * 9) * 0.08 : 0;
-    const d = MA.sim.derived(S), activeGlow = waking ? 1 - wk : 1;
+    const d = MA.sim.derived(S), activeGlow = away ? 0.35 : waking ? 1 - wk : 1;
 
     // floor
     box(0, 0, -0.5, 14, 12, 0.5, pal.floor);
     ctx.save(); ctx.globalAlpha = 0.16; ctx.strokeStyle = shade(pal.floor, 0.5); ctx.lineWidth = 1;
     for (let y = 1; y < 12; y++) { const a = P(0, y, 0), b = P(14, y, 0); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
     ctx.restore();
-    poly([P(10.6, 0.2, 0), P(13.8, 0.2, 0), P(13.8, 6.2, 0), P(10.6, 6.2, 0)], rgba(waking ? '#ffe2b0' : pal.moon, 0.13 + wk * 0.3 + (cine !== null && cine > 7.5 && cine < 14 ? 0.12 * Math.sin(((cine - 7.5) / 6.5) * Math.PI) : 0)));
+    poly([P(10.6, 0.2, 0), P(13.8, 0.2, 0), P(13.8, 6.2, 0), P(10.6, 6.2, 0)], rgba(waking || away ? '#ffe2b0' : pal.moon, 0.13 + (away ? 0.32 : wk * 0.3) + (cine !== null && cine > 7.5 && cine < 14 ? 0.12 * Math.sin(((cine - 7.5) / 6.5) * Math.PI) : 0)));
     poly([P(12.1, 0.2, 0), P(12.3, 0.2, 0), P(12.3, 6.2, 0), P(12.1, 6.2, 0)], rgba(pal.floor, 0.6));
     poly([P(1, 1, 0), P(10.3, 1, 0), P(10.3, 6.4, 0), P(1, 6.4, 0)], rgba(pal.under, 0.62));
     // placement: every free pad, the shortest trips brightest; the best one says so
@@ -142,7 +143,7 @@
     const bx0 = 3.3 + wk * 3.2;
     box(bx0, 1.02, 4.15, 9.98 - bx0, 4.98, 0.3, pal.blanket);
     winL(bx0, 9.98, 6.0, 3.75, 4.15, shade(pal.blanket, 0.8)); winR(9.98, 1.02, 6.0, 3.75, 4.15, shade(pal.blanket, 0.62));
-    const gone = wk > 0.7;
+    const gone = wk > 0.7 || away;
     if (!gone) {
       const up = clamp(wk / 0.5, 0, 1);
       if (up < 1) {
@@ -170,7 +171,7 @@
       if (!waking) { ctx.fillStyle = pal.zzz; ctx.textAlign = 'center'; [[0.9, 1.5, 0.5], [1.6, 2.4, 0.72], [2.5, 3.5, 1]].forEach(([dx, dz, k], i) => { const b = fx.reduced ? 0 : Math.sin(t * 1.6 + i) * s * 0.08; ctx.font = `${s * 0.72 * k}px ${FONT_D}`; ctx.globalAlpha = (0.5 + k * 0.5) * (S.irritation > 70 ? 0.45 : 1) * (cine === null ? 1 : clamp((cine - 5) / 1.5, 0, 1)); ctx.fillText('Z', hd[0] + dx * s * 0.8, hd[1] - dz * s * 0.62 + b); }); ctx.globalAlpha = 1; }
     }
     // limbs: the arm off the near side, the foot off the far end after a roll
-    const armOut = waking ? 0 : S.armOut, footOut = waking ? 0 : S.footOut;
+    const armOut = waking || away ? 0 : S.armOut, footOut = waking || away ? 0 : S.footOut;
     if (armOut > 0.02 && !gone) {
       const len = 3.04 * armOut, top = 4.79;
       box(4.6, 4.5, 4.45, 0.72, 1.55, 0.34, pal.skin);
@@ -193,13 +194,22 @@
     const flowing = (S.biting || 0) > 0 ? 1 : 0, refining = (S.refineRate || 0) > 0.05 ? 1 : 0;
     const L = (a, b, z, flow) => pipe([[a[0], a[1], z], [a[0], b[1], z], [b[0], b[1], z]], flow);
     tanks.forEach((b) => L(NEST, center(b), 0.14, flowing));
-    if (rig) { const st = MA.sim.storePoint(MA.sim.nearestStore(S)); pipe([[site.skin[0], site.skin[1] + 0.3, 1.2], [site.rig[0] + 1.2, site.rig[1] + 0.9, 1.2], [site.rig[0] + 1.2, site.rig[1] + 0.9, 0.18], [site.rig[0] + 1.2, st[1], 0.18], [st[0], st[1], 0.18]], flowing); }
+    const nearTank = (p) => { let best = null, bd = Infinity; for (const b of tanks) { const c = center(b), dd = Math.hypot(c[0] - p[0], c[1] - p[1]); if (dd < bd) { bd = dd; best = c; } } return best || NEST; };
+    S.buildings.filter((b) => b.type === 'refinery').forEach((b) => { const c = center(b); L(nearTank(c), c, 0.22, refining); });
+    const drip = S.buildings.find((b) => b.type === 'drip');
+    if (drip) { const dp = MA.sim.storePoint(drip, S); L([dp[0], dp[1]], nearTank(dp), 0.3, flowing); }
+    if (rig) { const st = MA.sim.storePoint(MA.sim.nearestStore(S), S); pipe([[site.skin[0], site.skin[1] + 0.3, 1.2], [site.rig[0] + 1.2, site.rig[1] + 0.9, 1.2], [site.rig[0] + 1.2, site.rig[1] + 0.9, 0.18], [site.rig[0] + 1.2, st[1], 0.18], [st[0], st[1], 0.18]], flowing); }
 
     if (fx.flare > 0 && !fx.reduced) { const c0 = P(6.5, 6.4, 1.2); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.translate(c0[0], c0[1]); ctx.rotate(t * 0.5); for (let i = 0; i < 12; i++) { ctx.rotate(Math.PI / 6); const g = ctx.createLinearGradient(0, 0, s * 13, 0); g.addColorStop(0, rgba(pal.primary, 0.3 * fx.flare)); g.addColorStop(1, rgba(pal.primary, 0)); ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(s * 13, -s * 1.2); ctx.lineTo(s * 13, s * 1.2); ctx.closePath(); ctx.fill(); } ctx.restore(); }
     const items = [];
     const drop = (b) => { const k = clamp((S.time - b.born) / (FEEL.build_drop_ms / 1000), 0, 1); return fx.reduced ? 0 : (1 - k) * (1 - k) * 4; };
     for (const b of S.buildings) {
       if (b.type === 'nest') continue;
+      if (b.type === 'drip') {
+        const dp = MA.sim.storePoint(b, S);
+        items.push({ d: dp[0] + dp[1] + 0.5, f: () => { const dz = drop(b); box(dp[0] - 0.08, dp[1] - 0.08, dz, 0.16, 0.16, dp[2] - 0.35, pal.metal); cyl(dp[0], dp[1], dz + dp[2] - 0.4, 0.42, 0.45, pal.pipe, flowing ? pal.blood : shade(pal.pipe, 0.6)); if (flowing && !fx.reduced) glow(P(dp[0], dp[1], dp[2]), s * 0.9, pal.blood, 0.25); if (opt.selected === b.id) sel(dp[0] - 0.6, dp[1] - 0.6, 1.2, 1.2); } });
+        continue;
+      }
       if (b.type === 'rig') {
         items.push({ d: site.rig[0] + site.rig[1], f: () => { const [x, y] = site.rig, dz = drop(b), h = 1.3 + b.level * 0.22, w = 1.0 + b.level * 0.1; [[0, 0], [w, 0], [0, 0.9], [w, 0.9]].forEach(([ox, oy]) => box(x + ox, y + oy, dz, 0.14, 0.14, h, pal.metal)); box(x - 0.1, y - 0.1, dz + h, w + 0.34, 1.14, 0.12, pal.metal, [1.3, 1, 0.8]); for (let i = 0; i < b.level; i++) box(x + 0.1 + i * 0.3, y + 0.2, dz + h + 0.12, 0.2, 0.2, 0.26, pal.primary); if (opt.selected === b.id) sel(x, y, w + 0.3, 1.1); } });
         continue;
@@ -320,7 +330,7 @@
 
     if (cine !== null) { const dark = 0.62 * clamp((10 - cine) / 3.5, 0, 1); if (dark > 0) { const h = P(3.4, 3.4, 5.2), g = ctx.createRadialGradient(h[0], h[1], s * 1.5, h[0], h[1], s * (5 + 6 * clamp((cine - 4) / 6, 0, 1))); g.addColorStop(0, `rgba(5,8,20,${dark * 0.25})`); g.addColorStop(1, `rgba(5,8,20,${dark})`); ctx.fillStyle = g; ctx.fillRect(-9999, -9999, 99999, 99999); } }
     if (fx.flash > 0) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = `rgba(255,255,255,${fx.flash * 0.5})`; ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height); const g = ctx.createRadialGradient(ctx.canvas.width / 2, ctx.canvas.height / 2, ctx.canvas.height * 0.25, ctx.canvas.width / 2, ctx.canvas.height / 2, ctx.canvas.height * 0.75); g.addColorStop(0, rgba(pal.accent, 0)); g.addColorStop(1, rgba(pal.accent, 0.5 * fx.flash)); ctx.fillStyle = g; ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height); ctx.restore(); }
-    if (waking) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(255,214,160,${wk * 0.16})`; ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height); ctx.restore(); }
+    if (waking || away) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(255,214,160,${away ? 0.13 : wk * 0.16})`; ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height); ctx.restore(); }
   }
 
   // the opening flight: in through the window, a pass over the sleeper, down to the bottle cap
@@ -340,7 +350,7 @@
   // which building is under a pointer (screen px)? nearest pad centre within reach
   function pick(v, S, px, py) {
     let best = null, bd = Math.max(30, v.s * 2.2);
-    for (const b of S.buildings) { if (b.type === 'nest') continue; const c = b.type === 'rig' ? [SITES[S.site].rig[0] + 0.6, SITES[S.site].rig[1] + 0.5] : MA.sim.padCenter(b); const p = project(v, c[0], c[1], 0.9); const dd = Math.hypot(p[0] - px, p[1] - py); if (dd < bd) { bd = dd; best = b; } }
+    for (const b of S.buildings) { if (b.type === 'nest') continue; const c = b.type === 'rig' ? [SITES[S.site].rig[0] + 0.6, SITES[S.site].rig[1] + 0.5] : b.type === 'drip' ? MA.sim.storePoint(b, S) : MA.sim.padCenter(b); const p = project(v, c[0], c[1], 0.9); const dd = Math.hypot(p[0] - px, p[1] - py); if (dd < bd) { bd = dd; best = b; } }
     return best;
   }
 

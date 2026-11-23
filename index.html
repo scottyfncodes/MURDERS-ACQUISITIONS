@@ -49,8 +49,8 @@
 
   <div class="hud" id="hud" hidden>
     <div class="hud-top" role="status" aria-label="Night status">
-      <div class="plate" id="p-bank"><small>Stored</small><strong><span id="v-bank">0</span><i id="v-cap">/30</i></strong><em id="v-rate" hidden></em></div>
-      <div class="plate" id="p-clock"><small>Alarm in</small><strong id="v-clock">2:40</strong></div>
+      <div class="plate" id="p-bank"><small>Stored</small><strong><span id="v-bank">0</span><i id="v-cap">/30</i></strong><span class="rbar" id="p-refined" hidden><i id="b-refined"></i></span><em id="v-rate" hidden></em></div>
+      <div class="plate" id="p-clock"><small id="l-clock">Alarm in</small><strong id="v-clock">2:40</strong></div>
       <div class="plate" id="p-staff" hidden><small>Staff</small><strong><span id="v-staff">0</span><i id="v-housing">/3</i></strong></div>
       <div class="plate" id="p-irr" hidden><small>Itch</small><div class="bar irr"><i id="b-irr"></i><u></u></div></div>
     </div>
@@ -60,6 +60,7 @@
       <div class="memo" id="memo" aria-live="polite" hidden><p><b>Sticky note from Rhonda</b><span id="memo-text"></span></p></div>
       <div class="actions">
         <button type="button" class="recall" id="recall" hidden>SCATTER</button>
+        <button type="button" class="recall nightfall" id="nightfall" hidden>NIGHTFALL</button>
         <span class="gap"></span>
         <button type="button" class="icon-btn" id="mute" aria-label="Mute sound" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path class="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="cross" d="M16 9l5 6M21 9l-5 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
         <button type="button" class="icon-btn" id="pause" aria-label="Pause"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button>
@@ -107,9 +108,10 @@
         <div><dt>Lost</dt><dd id="r-lost">0</dd></div>
       </dl>
       <div class="payroll" id="r-payroll" hidden><h3>On payroll</h3><p id="r-staff-list"></p></div>
+      <p class="clot" id="r-clot" hidden></p>
       <div class="memoriam" id="r-memoriam" hidden><h3>In memoriam</h3><ul id="r-lost-list"></ul></div>
       <div class="plan"><h3>Tonight</h3><ul id="r-plan"></ul></div>
-      <button class="btn-go" id="again" type="button">NIGHT 2</button>
+      <button class="btn-go" id="again" type="button">START THE DAY</button>
       <button class="btn-sec" id="to-title" type="button">Back to the title</button>
     </div>
   </div>
