@@ -6,10 +6,10 @@
   const C = MA.config;
 
   const V1_KEY = 'murders-acquisitions.v1', V2_KEY = 'murders-acquisitions.v2';
-  const PLACEABLE = ['tank', 'pool', 'refinery'], SINGLES = ['rig', 'drip'];
+  const PLACEABLE = ['tank', 'pool', 'refinery'], SINGLES = ['rig', 'drip', 'windbreak', 'masks'];
 
   function newCampaign() {
-    return { night: 1, phase: 'night', bank: 0, refined: 0, zones: 1, buildings: [], workers: [], lost: [], nextId: 1, hires: 0, unlocks: [], totals: { extracted: 0, nights: 0 }, history: [] };
+    return { night: 1, phase: 'night', bank: 0, refined: 0, zones: 1, suspicion: 0, counters: {}, newCounter: null, buildings: [], workers: [], lost: [], nextId: 1, hires: 0, unlocks: [], totals: { extracted: 0, nights: 0 }, history: [] };
   }
   function defaults() { return { v: 2, settings: { muted: false, seenOpening: false }, campaign: newCampaign(), archive: null }; }
 
@@ -47,13 +47,17 @@
     }
     c.nextId = Math.max(int(raw.nextId, 1, 1e6), maxId + 1);
     c.hires = Math.max(int(raw.hires, 0, 1e6), c.workers.length);
-    c.unlocks = (Array.isArray(raw.unlocks) ? raw.unlocks : []).filter((u, i, a) => (C.BUILD_ORDER.includes(u) || u === 'scatter') && a.indexOf(u) === i);
+    c.unlocks = (Array.isArray(raw.unlocks) ? raw.unlocks : []).filter((u, i, a) => (C.BUILD_ORDER.includes(u) || u === 'scatter' || u === 'push') && a.indexOf(u) === i);
     for (const b of c.buildings) if (!c.unlocks.includes(b.type)) c.unlocks.push(b.type);
     if (c.zones > 1 && !c.unlocks.includes('floor')) c.unlocks.push('floor');
     c.refined = Math.min(c.bank, num(raw.refined, 0, 1e7));
+    c.suspicion = num(raw.suspicion, 0, 100);
+    c.newCounter = c.phase === 'day' && C.ECON.counters.some((k) => k.id === raw.newCounter) ? raw.newCounter : null;
+    const ct = raw.counters && typeof raw.counters === 'object' ? raw.counters : {};
+    for (const k of C.ECON.counters) if (ct[k.id] === true) { c.counters[k.id] = true; if (!c.unlocks.includes(k.answer)) c.unlocks.push(k.answer); }
     const t = raw.totals && typeof raw.totals === 'object' ? raw.totals : {};
     c.totals = { extracted: num(t.extracted, 0), nights: int(t.nights, 0, 9999) };
-    c.history = (Array.isArray(raw.history) ? raw.history.slice(0, 30) : []).filter((h) => h && typeof h === 'object').map((h) => ({ night: Math.max(1, int(h.night, 1, 9999)), extracted: int(h.extracted, 0), staff: int(h.staff, 0, 999), lost: int(h.lost, 0, 999), hires: int(h.hires, 0, 999), clotted: int(h.clotted, 0, 1e7) }));
+    c.history = (Array.isArray(raw.history) ? raw.history.slice(0, 30) : []).filter((h) => h && typeof h === 'object').map((h) => ({ night: Math.max(1, int(h.night, 1, 9999)), extracted: int(h.extracted, 0), staff: int(h.staff, 0, 999), lost: int(h.lost, 0, 999), hires: int(h.hires, 0, 999), clotted: int(h.clotted, 0, 1e7), suspicion: num(h.suspicion, 0, 100) }));
     return c;
   }
 
@@ -93,7 +97,7 @@
   // the colony as a night or a day left it: buildings, staff, blood, what has been learned
   function snapshot(camp, S) {
     return {
-      night: camp.night, phase: camp.phase, bank: S.bank, refined: S.refined, zones: S.zones,
+      night: camp.night, phase: camp.phase, newCounter: camp.newCounter, suspicion: camp.suspicion, counters: camp.counters, bank: S.bank, refined: S.refined, zones: S.zones,
       buildings: S.buildings.filter((b) => b.type !== 'nest').map((b) => ({ type: b.type, level: b.level, pad: b.pad })),
       workers: S.workers.map((w) => ({ id: w.id, name: w.name, trait: w.trait, bio: w.bio, larvae: w.larvae, loads: w.loads, since: w.since })),
       lost: camp.lost.concat(S.lost.map((w) => ({ name: w.name, trait: w.trait, larvae: w.larvae, night: camp.night, cause: w.cause }))),
@@ -105,12 +109,19 @@
     const n = snapshot(camp, S);
     n.night = camp.night + 1; n.phase = 'day'; n.bank = Math.max(0, S.bank - report.clotted); n.refined = Math.min(n.bank, S.refined);
     if (report.clotted > 0 && !n.unlocks.includes('refinery')) n.unlocks.push('refinery');
+    // he takes stock over breakfast: at most one new countermeasure a morning, then he forgets a little during the day
+    let sus = Math.min(100, camp.suspicion + report.suspicion); n.counters = Object.assign({}, camp.counters); n.newCounter = null;
+    const next = C.ECON.counters.find((k) => !n.counters[k.id]);
+    if (next && sus >= next.at) { n.counters[next.id] = true; n.unlocks.push(next.answer); n.newCounter = next.id; }
+    n.suspicion = Math.max(0, sus - C.ECON.suspicionDailyForget);
     n.totals = { extracted: camp.totals.extracted + report.extracted, nights: camp.totals.nights + 1 };
-    n.history = [{ night: camp.night, extracted: report.extracted, staff: report.staff, lost: report.lost.length, hires: report.hires, clotted: report.clotted }].concat(camp.history);
+    n.history = [{ night: camp.night, extracted: report.extracted, staff: report.staff, lost: report.lost.length, hires: report.hires, clotted: report.clotted, suspicion: Math.round(Math.min(100, camp.suspicion + report.suspicion)) }].concat(camp.history);
     return cleanCampaign(n);
   }
+  // the next countermeasure he has not bought yet, if any
+  function nextCounter(camp) { return C.ECON.counters.find((k) => !camp.counters[k.id]) || null; }
   // a day (no clock, no host) saves what was built; nightfall hands the colony to the next night
-  function foldDay(camp, S, nightfall) { const n = snapshot(camp, S); n.lost = camp.lost; n.phase = nightfall ? 'night' : 'day'; return cleanCampaign(n); }
+  function foldDay(camp, S, nightfall) { const n = snapshot(camp, S); n.lost = camp.lost; n.phase = nightfall ? 'night' : 'day'; n.newCounter = nightfall ? null : camp.newCounter; return cleanCampaign(n); }
 
   // what Rhonda plans for the coming night: true statements about the colony, never promises
   function plan(camp) {
@@ -126,6 +137,6 @@
     return out.slice(0, 3);
   }
 
-  MA.campaign = { V1_KEY, V2_KEY, newCampaign, defaults, fromSave, migrateV1, cleanCampaign, fold, foldDay, plan, nightLength };
+  MA.campaign = { V1_KEY, V2_KEY, newCampaign, defaults, fromSave, migrateV1, cleanCampaign, fold, foldDay, nextCounter, plan, nightLength };
   if (typeof module !== 'undefined') module.exports = MA;
 })(typeof window !== 'undefined' ? window : globalThis);

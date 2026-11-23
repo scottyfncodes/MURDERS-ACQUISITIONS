@@ -36,11 +36,18 @@
     clotShare: 0.4, refineMlPerS: 1.6,
     // the drip line unlocks once the round trip from the bite to storage runs past this many seconds
     longTripSeconds: 2.8,
+    // his sleep comes in waves from night 2: irritation per bite runs from x0.45 in deep sleep to x1.6 in light sleep (about x1 over a cycle)
+    sleepCycleSeconds: 40, deepIrritation: 0.45, lightIrritation: 1.6,
+    // suspicion: what he notices. Bites add a little (with diminishing returns), disturbances more, and a squashed employee most; he forgets some each day
+    suspicionPerSqrtLoad: 0.6, suspicionScratch: 2, suspicionSwat: 4, suspicionStir: 10, suspicionPerLoss: 3, suspicionDailyForget: 20,
+    // countermeasures, in the order he buys them, and the suspicion that sets each one off
+    counters: [{ id: 'fan', at: 40, answer: 'windbreak' }, { id: 'repellent', at: 75, answer: 'masks' }],
+    fanFlightFactor: 1.5, repellentBiteFactor: 1.6,
   };
   const PACE = [
-    { id: 'cautious', label: 'Cautious', bite: 1.4, irritation: 0.5, morale: 0.10 },
+    { id: 'cautious', label: 'Ease off', bite: 1.25, fly: 1.1, irritation: 0.4, morale: 0.10 },
     { id: 'standard', label: 'Standard', bite: 1.0, irritation: 1.0, morale: 0.02 },
-    { id: 'aggressive', label: 'Aggressive', bite: 0.65, irritation: 2.0, morale: -0.15 },
+    { id: 'aggressive', label: 'Aggressive', bite: 0.5, fly: 0.8, irritation: 2.0, morale: -0.05 },
   ];
 
   // `unlock` is when a card first appears: never on a timer, always because the operation hit a wall
@@ -51,11 +58,13 @@
     rig: { name: 'Extraction rig', short: 'Rig', cost: 80, growth: 1.8, blurb: 'Bite stations on the subject. More staff on skin at once.', effect: (l) => `${3 + 3 * l} bite spots`, gain: '+3 bite spots', single: true, maxLevel: 5 },
     refinery: { name: 'Refinery', short: 'Refinery', cost: 70, growth: 1.9, blurb: 'Refines stored blood so it keeps overnight. Raw blood clots by morning.', effect: (l) => `Refines ${(1.6 * l).toFixed(1)} mL/s`, gain: 'Stops clotting', place: true },
     drip: { name: 'Drip line', short: 'Drip', cost: 110, growth: 1, blurb: 'A funnel at the bite, piped straight to storage. Staff unload right where they drink.', effect: () => 'Unloads at the bite', gain: 'Shortest trips', single: true, maxLevel: 1 },
+    windbreak: { name: 'Windbreak', short: 'Windbreak', cost: 90, growth: 1, blurb: 'A cereal box, flattened, between the fan and the bite. Flights are back to normal.', effect: () => 'Cancels the fan', gain: 'Cancels the fan', single: true, maxLevel: 1 },
+    masks: { name: 'Gas masks', short: 'Masks', cost: 140, growth: 1, blurb: 'Tiny masks for every employee. Bites are back to normal speed. Morale is complicated.', effect: () => 'Cancels the repellent', gain: 'Cancels the repellent', single: true, maxLevel: 1 },
     floor: { name: 'Floor space', short: 'Floor', cost: 60, growth: 1, blurb: 'The window side of the room, unclaimed. Four more places to build.', effect: () => '+4 build spots', gain: '+4 build spots', single: true, maxLevel: 1, expand: true },
     hatchery: { name: 'Hatchery', short: 'Hatchery', cost: 70, growth: 1.7, blurb: 'Nurses raise new hires here. Each hire costs banked blood.', effect: (l) => `${2 * l} nurse stations`, gain: '+2 nurses' },
   };
   // the cards a player can see, in order; refinery and hatchery return with the day phase
-  const BUILD_ORDER = ['tank', 'pool', 'refinery', 'rig', 'drip', 'floor'];
+  const BUILD_ORDER = ['windbreak', 'masks', 'tank', 'pool', 'refinery', 'rig', 'drip', 'floor'];
   // where Rhonda founded the company: a bottle cap under the bed, a short hop from the arm
   const NEST = [8.1, 3.3];
   // the floor opens in zones: the near floor first, the window side when it runs out (indices into PADS)
@@ -124,6 +133,13 @@
     dripNeed: 'Staff are flying the long way to storage. A drip line at the bite would pipe it home.',
     floorNeed: 'We are out of floor. The window side is unclaimed. For now.',
     floorBought: 'The window side is ours. Nobody was using it. — R.',
+    rhythm: 'He sleeps in waves. Push while he is deep under; ease off when he goes light. — R.',
+    lightWarn: 'He is in light sleep. Ease off before he notices.',
+    counter: {
+      fan: 'He bought a fan. Twenty-nine dollars. It blows right across the room. Every flight takes longer. He is escalating. — R.',
+      repellent: 'There is a plug-in by the bed now. It smells like a pine forest and litigation. Bites take longer. — R.',
+    },
+    answered: { windbreak: 'Windbreak up. The fan is now cooling a cereal box. — R.', masks: 'Masks on. Everyone looks very professional. — R.' },
     nightStart: (n, staff) => n === 2 ? `Night 2. ${staff ? `${staff} on payroll. ` : ''}Same arm, bigger plans. — R.` : `Night ${n}. ${staff} on payroll. Let's circle back to the arm. — R.`,
     idle: [
       'I have started calling the arm "the pipeline". — R.',
@@ -139,6 +155,8 @@
   // the first morning, and every morning after: what happened, and what tonight could be
   const MORNING = {
     headline: (r) => r.night === 1 ? `${r.extracted} mL. Not bad for one mosquito.` : r.lost.length ? 'We lost people last night.' : `${r.extracted} mL. ${r.staff} employees. One vision.`,
+    suspicion: (s, gain, next) => `Suspicion ${Math.round(s)}% (${gain >= 0 ? '+' : ''}${Math.round(gain)} last night, less what he forgets today).${next ? ` At ${next.at}% he ${next.id === 'fan' ? 'buys something' : 'buys something else'}.` : ''}`,
+    bought: (s, id) => `Suspicion ${Math.round(s)}%. He has had enough: he is buying a ${id === 'fan' ? 'fan' : 'mosquito repellent'} today.`,
     clot: (r) => r.clotted > 0 ? `${r.clotted} mL clotted overnight${r.refined ? `; ${r.refined} mL was refined and kept` : ''}.` : r.refined ? `${r.refined} mL refined. Nothing clotted.` : '',
     note: (r) => r.night === 1 ? (r.staff ? 'Last night it was just me. This morning we are a company. — R.' : 'Tonight we hire. Nobody builds an empire alone. — R.') : r.lost.length ? 'We keep going. It is what they would have wanted. Probably. — R.' : 'He has no idea. Let\'s keep it that way. — R.',
   };
@@ -222,6 +240,8 @@
     ['Scatter', 'When the hand twitches, Scatter pulls everyone off the skin.'],
     ['Clotting', 'Raw blood clots by morning. Refineries turn stored blood into blood that keeps.'],
     ['Days', 'While he is at work there is no clock and no hand. Build, then call nightfall.'],
+    ['His sleep', 'From the second night he sleeps in waves. Bites itch far less in deep sleep. Push while he is deep under and ease off when he goes light.'],
+    ['Suspicion', 'Every bite and every scratch makes him a little more suspicious. Past a point he buys things: a fan, then worse. Each has one answer.'],
     ['Mornings', 'The colony keeps. Every night starts where the last one ended.'],
   ];
 

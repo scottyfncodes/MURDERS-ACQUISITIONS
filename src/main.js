@@ -45,6 +45,7 @@
   // the day: he is at work, nothing to bite, no clock. Build, then call nightfall
   function startDay() {
     G.S = sim.newNight(save.campaign, { day: true }); resetPlay(); document.body.classList.add('morning', 'is-day');
+    for (const k of C.ECON.counters) if (G.S.counters[k.id] && !G.S.buildings.some((b) => b.type === k.answer)) fresh.add(k.answer); // what he bought is answered first
     $('nightfall').hidden = false; $('recall').hidden = true; G.dayAt = performance.now() / 1000; renderPanel(); drainEvents(); updateHud(0, performance.now() / 1000);
   }
   function nightfall() {
@@ -103,7 +104,7 @@
     const S = G.S, p = $('panel-build'); if (!S) return;
     const types = visibleCards(S);
     p.hidden = types.length === 0; G.cardsKey = types.join(',') + '|' + (G.placing || '') + '|' + (G.selected || '');
-    p.innerHTML = ''; for (const k in cards) delete cards[k];
+    p.innerHTML = ''; p.scrollLeft = 0; for (const k in cards) delete cards[k];
     if (G.placing) {
       const def = C.BUILDINGS[G.placing];
       p.innerHTML = `<div class="inspector placing"><span><b>Place the ${def.name.toLowerCase()}</b><small>Tap a glowing spot. Brighter means a shorter trip to the bite.</small></span><button type="button" class="x" id="cancel-place" aria-label="Cancel">×</button></div>`;
@@ -172,6 +173,8 @@
   cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', release); cv.addEventListener('lostpointercapture', release);
 
   $('recall').addEventListener('click', () => { if (G.S) { sim.recall(G.S); drainEvents(); } });
+  function setPush(on) { if (!G.S || G.S.phase === 'day') return; sim.setPush(G.S, on); drainEvents(); }
+  $('ease').addEventListener('click', () => setPush(false)); $('push').addEventListener('click', () => setPush(true));
   $('pause').addEventListener('click', () => setPaused(true)); $('resume').addEventListener('click', () => setPaused(false));
   $('mute').addEventListener('click', () => { save.settings.muted = !save.settings.muted; applyMute(); store(); });
   function applyMute() { audio.setMuted(save.settings.muted); $('mute').setAttribute('aria-pressed', String(save.settings.muted)); $('mute').setAttribute('aria-label', save.settings.muted ? 'Unmute sound' : 'Mute sound'); }
@@ -192,6 +195,7 @@
     if (G.mode === 'title') { if ((k === ' ' || k === 'enter') && document.activeElement.tagName !== 'BUTTON') { e.preventDefault(); clockIn(); } return; }
     if (k === 'p') setPaused(!G.paused);
     else if (k === 'b' && inPlay()) sim.setHold(G.S, true);
+    else if (k === 'f' && G.S && G.S.unlocked.includes('push')) setPush(G.S.pace !== 2);
     else if (k === ' ') { e.preventDefault(); if (G.S && G.S.unlocked.includes('scatter')) $('recall').click(); }
     else if (k === 'n' && G.S && G.S.phase === 'day') nightfall();
     else if (k >= '1' && k <= '6' && G.S) { const t = visibleCards(G.S)[Number(k) - 1]; if (t) pickCard(t); }
@@ -209,7 +213,7 @@
       R.onEvent(S, e);
       switch (e.type) {
         case 'memo': if (e.tone === 'idle' && G.memoQ.length) break; if (e.tone === 'idle' || e.tone === 'info') G.memoQ.push(e); else { G.memoQ = [e]; G.memoUntil = 0; } break;
-        case 'unlock': if (e.what === 'scatter') { $('recall').hidden = false; flash('recall', 'arrive'); } else { audio.play('hatch'); fresh.add(e.what); } G.cardsKey = ''; break;
+        case 'unlock': if (e.what === 'push') { /* shown by the HUD */ } else if (e.what === 'scatter') { $('recall').hidden = false; flash('recall', 'arrive'); } else { audio.play('hatch'); fresh.add(e.what); } G.cardsKey = ''; break;
         case 'expand': audio.play('coin'); setTimeout(() => audio.play('thud'), C.FEEL.build_drop_ms); flash('p-bank', 'pulse'); G.cardsKey = ''; saveDay(); break;
         case 'build': saveDay(); audio.play('coin'); setTimeout(() => audio.play('thud'), C.FEEL.build_drop_ms); flash('p-bank', 'pulse'); G.cardsKey = ''; break;
         case 'deny': if (e.what === 'day') { G.flashCoach = { text: C.NOTES.dayBite, until: performance.now() / 1000 + 2.2 }; break; } audio.play('deny'); if (e.what === 'recall') flash('recall', 'deny'); else if (e.what === 'full') { flash('p-bank', 'deny'); } else if (cards[e.what]) { const c = cards[e.what]; c.classList.remove('deny'); void c.offsetWidth; c.classList.add('deny'); flash('p-bank', 'deny'); } break;
@@ -219,6 +223,7 @@
         case 'telegraph': if (e.kind === 'swat' || e.kind === 'scratch') { audio.play('warn'); $('recall').classList.add('alarm'); } break;
         case 'impact': $('recall').classList.remove('alarm'); if (e.kind === 'swat' || e.kind === 'scratch') { audio.play('hit'); if (e.kind === 'swat' && !R.fx.reduced) G.hitStop = C.FEEL.hit_stop_ms / 1000; flash('p-clock', 'pulse'); if (e.dead.length) flash('p-staff', 'deny'); } break;
         case 'recall': audio.play('whistle'); break;
+        case 'push': audio.play(e.on ? 'buzz' : 'click'); break;
         case 'hatch': audio.play('hatch', 0.5); flash('p-staff', 'pulse');
           if (e.first) { audio.play('quota'); audio.play('stamp'); G.hireAt = performance.now() / 1000; if (!R.fx.reduced) { G.slow = 1.4; G.punch = { f: [e.at[0], e.at[1], 1.4], until: performance.now() / 1000 + 2.4 }; } }
           break;
@@ -242,6 +247,7 @@
     const list = $('r-lost-list'); list.innerHTML = ''; for (const w of r.lost) { const l = document.createElement('li'); l.textContent = `${w.name} `; const s = document.createElement('span'); s.textContent = `· ${w.trait} · supported ${w.larvae} larvae`; l.append(s); list.append(l); }
     $('r-memoriam').hidden = r.lost.length === 0;
     const clot = C.MORNING.clot(r); $('r-clot').hidden = !clot; $('r-clot').textContent = clot;
+    $('r-sus').hidden = false; const s0 = Math.min(100, before.suspicion + r.suspicion), nc = save.campaign.newCounter; $('r-sus').textContent = nc ? C.MORNING.bought(s0, nc) : C.MORNING.suspicion(s0, r.suspicion, K.nextCounter(before)); $('r-sus').classList.toggle('alarm', !!nc);
     const plan = $('r-plan'); plan.innerHTML = ''; K.plan(save.campaign).forEach((t) => { const l = document.createElement('li'); l.textContent = t; plan.append(l); });
     $('again').textContent = 'START THE DAY'; $('hud').hidden = true;
     openModal('review'); $('review').setAttribute('data-ready', '');
@@ -258,6 +264,12 @@
     if (G.placing) return null;
     if (S.phase === 'day') return S.night === 2 && now - G.dayAt < 9 ? ['No clock while he is at work. Build, then tap Nightfall.'] : null;
     if (f.st === 'drink' && f.belly >= C.ECON.bellyMl - 0.05) return ['Full. Let go to fly it home.', 'warn'];
+    if (S.rhythm && S.state === 'playing') {
+      if (S.depth < 0.35 && S.pace === 2) return ['Light sleep: ease off!', 'warn'];
+      if (S.night === 2 && S.depth > 0.6 && S.pace !== 2) return ['Deep sleep. Push now.'];
+      if (S.night === 2 && S.depth < 0.35) return ['Light sleep. Easing off keeps him under.'];
+    }
+    if (S.phase === 'day' && S.counters) { const a = C.ECON.counters.find((k) => S.counters[k.id] && !S.buildings.some((b) => b.type === k.answer)); if (a) return [`He bought a ${a.id === 'fan' ? 'fan' : 'repellent'}. Build ${C.BUILDINGS[a.answer].name} to answer it.`, 'warn']; }
     if (!tut) return null;
     const idle = f.st === 'home' && now - G.idleAt > 3.5;
     if (tut.step === 'bite') return f.st === 'drink' ? ['Keep holding. Watch her fill up.'] : ['Press and hold anywhere to bite'];
@@ -279,7 +291,13 @@
     else { set('l-clock', 'Alarm in'); set('v-clock', clock(S.shiftLen - S.sleepLost - S.time)); $('p-clock').classList.toggle('cut', S.shiftLen - S.sleepLost - S.time < 20); }
     const hasRef = S.buildings.some((b) => b.type === 'refinery'); show('p-refined', hasRef); if (hasRef) { const w = Math.round((S.refined / Math.max(1, S.bank)) * 100); if (G.shown.rw !== w) { G.shown.rw = w; $('b-refined').style.width = w + '%'; $('p-refined').title = `${Math.floor(S.refined)} mL refined`; } }
     show('p-staff', S.hires > 0 || S.workers.length > 0); set('v-staff', String(S.workers.length)); set('v-housing', `/${d.housing}`);
-    show('p-irr', S.unlocked.includes('scatter') && S.phase !== 'day'); const ip = S.irritation | 0; if (G.shown.ip !== ip) { G.shown.ip = ip; $('b-irr').style.width = ip + '%'; }
+    // one plate, two jobs: his sleep and itch at night; his suspicion (and when he next buys something) in the day
+    const day = S.phase === 'day', sus = save.campaign.suspicion, nxt = K.nextCounter(save.campaign);
+    show('p-irr', day ? S.night > 2 || sus > 0 : S.unlocked.includes('scatter'));
+    const lab = day ? 'Suspicion' : S.rhythm ? (S.depth < 0.35 ? 'Light' : S.depth > 0.6 ? 'Deep' : 'Sleep') : 'Itch'; set('l-irr', lab);
+    $('p-irr').classList.toggle('light', !day && S.rhythm && S.depth < 0.35); $('p-irr').classList.toggle('deep', !day && S.rhythm && S.depth > 0.6);
+    const ip = Math.round(day ? sus : S.irritation); if (G.shown.ip !== ip + (day ? 'd' : 'n')) { G.shown.ip = ip + (day ? 'd' : 'n'); $('b-irr').style.width = ip + '%'; $('p-irr').querySelector('u').style.left = `${day ? (nxt ? nxt.at : 100) : C.ECON.eventThreshold}%`; }
+    show('pace', !day && S.unlocked.includes('push')); const pv = String(S.pace === 2); if (G.shown.pv !== pv) { G.shown.pv = pv; $('push').setAttribute('aria-pressed', pv); $('ease').setAttribute('aria-pressed', String(S.pace !== 2)); }
     const rc = $('recall'), cd = S.recallCd > 0; rc.classList.toggle('cooling', cd); rc.style.setProperty('--cd', cd ? `${(S.recallCd / (C.FEEL.recall_cooldown_s * S.mods.recallCd)) * 100}%` : '0%');
     if (!(S.hev && !S.hev.hit && (S.hev.kind === 'swat' || S.hev.kind === 'scratch'))) rc.classList.remove('alarm');
     const ct = coachText(S, now), coach = $('coach'), txt = ct ? ct[0] : '';
@@ -347,7 +365,7 @@
   // ---------- measurement hooks (PLAYCRAFT, the shot list, the feature checks) ----------
   const fxName = (S) => (S && S.hev && S.hev.kind === 'swat' ? (S.hev.hit ? 'swat-impact' : 'swat-warning') : S && S.hev ? S.hev.kind : null);
   window.__game = {
-    get state() { return G.mode === 'title' ? 'title' : G.mode === 'opening' ? 'opening' : G.S.state; }, get phase() { return G.S ? G.S.phase : save.campaign.phase; }, get refined() { return G.S ? Math.floor(G.S.refined) : 0; }, get zones() { return G.S ? G.S.zones : save.campaign.zones; }, get paused() { return G.paused; }, get score() { return G.S ? Math.round(G.S.extracted) : 0; }, get time() { return G.S ? G.S.time : 0; },
+    get state() { return G.mode === 'title' ? 'title' : G.mode === 'opening' ? 'opening' : G.S.state; }, get phase() { return G.S ? G.S.phase : save.campaign.phase; }, get refined() { return G.S ? Math.floor(G.S.refined) : 0; }, get depth() { return G.S ? G.S.depth : 1; }, get pushing() { return !!(G.S && G.S.pace === 2); }, get suspicion() { return save.campaign.suspicion; }, get counters() { return Object.keys(save.campaign.counters); }, get zones() { return G.S ? G.S.zones : save.campaign.zones; }, get paused() { return G.paused; }, get score() { return G.S ? Math.round(G.S.extracted) : 0; }, get time() { return G.S ? G.S.time : 0; },
     get bank() { return G.S ? Math.floor(G.S.bank) : 0; }, get workers() { return G.S ? G.S.workers.length : 0; }, get buildings() { return G.S ? G.S.buildings.length - 1 : 0; }, get casualties() { return G.S ? G.S.lost.length : 0; },
     get irritation() { return G.S ? G.S.irritation : 0; }, get night() { return G.S ? G.S.night : save.campaign.night; }, get founder() { return G.S ? G.S.founder.st : null; }, get belly() { return G.S ? G.S.founder.belly : 0; },
     get step() { return G.S && G.S.tut ? G.S.tut.step : null; }, get placing() { return G.placing; }, get unlocked() { return G.S ? G.S.unlocked.slice() : []; }, get sleepLeft() { return G.S ? G.S.shiftLen - G.S.sleepLost - G.S.time : 0; }, get fx() { return fxName(G.S); }, get cine() { return G.mode === 'opening' ? G.cineT : null; },

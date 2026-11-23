@@ -88,6 +88,7 @@
       ctx.fillStyle = pal.bug; ctx.beginPath(); ctx.ellipse(-u * 0.5, u * 0.1, u * 0.9, u * 0.42, -0.25, 0, 7); ctx.fill(); ctx.beginPath(); ctx.arc(u * 0.55, -u * 0.25, u * 0.5, 0, 7); ctx.fill();
       ctx.strokeStyle = pal.bug; ctx.lineWidth = Math.max(1, u * 0.14); ctx.beginPath(); ctx.moveTo(u * 0.9, -u * 0.1); ctx.lineTo(u * 1.7, u * 0.5); ctx.stroke();
       if (o.belly) { ctx.fillStyle = pal.blood; ctx.beginPath(); ctx.ellipse(-u * 0.55, u * 0.12, u * (0.3 + 0.62 * o.belly), u * (0.16 + 0.36 * o.belly), -0.25, 0, 7); ctx.fill(); }
+      if (o.mask) { ctx.fillStyle = '#eef0fa'; ctx.beginPath(); ctx.ellipse(u * 0.82, -u * 0.12, u * 0.26, u * 0.2, 0, 0, 7); ctx.fill(); ctx.strokeStyle = '#eef0fa'; ctx.lineWidth = Math.max(1, u * 0.08); ctx.beginPath(); ctx.moveTo(u * 0.6, -u * 0.2); ctx.lineTo(u * 0.2, -u * 0.35); ctx.stroke(); }
       if (o.founder) { ctx.fillStyle = pal.accent; ctx.beginPath(); ctx.ellipse(u * 0.5, -u * 0.62, u * 0.62, u * 0.26, -0.2, 0, 7); ctx.fill(); ctx.beginPath(); ctx.arc(u * 0.62, -u * 0.86, u * 0.12, 0, 7); ctx.fill(); ctx.fillStyle = pal.primary; ctx.fillRect(u * 0.1, u * 0.05, u * 0.34, u * 0.42); }
       else { ctx.fillStyle = o.hat || pal.hat; ctx.beginPath(); ctx.arc(u * 0.55, -u * 0.42, u * 0.52, Math.PI, 0); ctx.fill(); ctx.fillRect(u * 0.0, -u * 0.5, u * 1.25, u * 0.16); }
       if (o.carry) { ctx.fillStyle = pal.blood; ctx.beginPath(); ctx.moveTo(-u * 0.5, u * 0.5); ctx.quadraticCurveTo(-u * 1.15, u * 1.5, -u * 0.5, u * 1.7); ctx.quadraticCurveTo(u * 0.15, u * 1.5, -u * 0.5, u * 0.5); ctx.fill(); }
@@ -168,8 +169,9 @@
       if (phoneLit >= 0.5) { ell([hd[0] + hr * 0.38, hd[1] + hr * 0.1], hr * 0.12, hr * 0.09, shade(pal.skin, 0.3)); ell([hd[0] - hr * 0.1, hd[1] + hr * 0.28], hr * 0.12, hr * 0.09, shade(pal.skin, 0.3)); }
       else if (!waking) { ctx.beginPath(); ctx.arc(hd[0] + hr * 0.38, hd[1] + hr * 0.12, hr * 0.16, 0.15, Math.PI - 0.15); ctx.stroke(); ctx.beginPath(); ctx.arc(hd[0] - hr * 0.1, hd[1] + hr * 0.3, hr * 0.16, 0.15, Math.PI - 0.15); ctx.stroke(); }
       else { ell([hd[0] + hr * 0.38, hd[1] + hr * 0.1], hr * 0.12, hr * 0.07, shade(pal.skin, 0.35)); ell([hd[0] - hr * 0.1, hd[1] + hr * 0.28], hr * 0.12, hr * 0.07, shade(pal.skin, 0.35)); ctx.beginPath(); ctx.moveTo(hd[0] + hr * 0.2, hd[1] + hr * 0.62); ctx.lineTo(hd[0] + hr * 0.5, hd[1] + hr * 0.5); ctx.stroke(); ctx.fillStyle = shade(pal.skin, 0.72); ctx.beginPath(); ctx.ellipse(hd[0] + hr * 0.4, hd[1] + hr * 0.28, hr * 0.2, hr * 0.07, -0.4, 0, 7); ctx.fill(); }
-      if (!waking) { ctx.fillStyle = pal.zzz; ctx.textAlign = 'center'; [[0.9, 1.5, 0.5], [1.6, 2.4, 0.72], [2.5, 3.5, 1]].forEach(([dx, dz, k], i) => { const b = fx.reduced ? 0 : Math.sin(t * 1.6 + i) * s * 0.08; ctx.font = `${s * 0.72 * k}px ${FONT_D}`; ctx.globalAlpha = (0.5 + k * 0.5) * (S.irritation > 70 ? 0.45 : 1) * (cine === null ? 1 : clamp((cine - 5) / 1.5, 0, 1)); ctx.fillText('Z', hd[0] + dx * s * 0.8, hd[1] - dz * s * 0.62 + b); }); ctx.globalAlpha = 1; }
+      if (!waking) { ctx.fillStyle = pal.zzz; ctx.textAlign = 'center'; [[0.9, 1.5, 0.5], [1.6, 2.4, 0.72], [2.5, 3.5, 1]].forEach(([dx, dz, k], i) => { const b = fx.reduced ? 0 : Math.sin(t * 1.6 + i) * s * 0.08; ctx.font = `${s * 0.72 * k}px ${FONT_D}`; ctx.globalAlpha = (0.5 + k * 0.5) * (S.irritation > 70 ? 0.45 : 1) * (cine === null ? 1 : clamp((cine - 5) / 1.5, 0, 1)) * (S.rhythm ? 0.25 + 0.75 * S.depth : 1); ctx.fillText('Z', hd[0] + dx * s * 0.8, hd[1] - dz * s * 0.62 + b); }); ctx.globalAlpha = 1; }
     }
+    if (S.rhythm && !gone && !waking && S.state === 'playing' && S.depth < 0.35) { const h = P(2.75, 3.5, 6.9); tag(h[0], h[1] - s * 0.4, 'LIGHT SLEEP', Math.sin(t * 6) > 0 ? pal.accent : pal.primary); }
     // limbs: the arm off the near side, the foot off the far end after a roll
     const armOut = waking || away ? 0 : S.armOut, footOut = waking || away ? 0 : S.footOut;
     if (armOut > 0.02 && !gone) {
@@ -204,7 +206,7 @@
     const items = [];
     const drop = (b) => { const k = clamp((S.time - b.born) / (FEEL.build_drop_ms / 1000), 0, 1); return fx.reduced ? 0 : (1 - k) * (1 - k) * 4; };
     for (const b of S.buildings) {
-      if (b.type === 'nest') continue;
+      if (b.type === 'nest' || b.type === 'windbreak' || b.type === 'masks') continue; // drawn with the fan, and on the staff
       if (b.type === 'drip') {
         const dp = MA.sim.storePoint(b, S);
         items.push({ d: dp[0] + dp[1] + 0.5, f: () => { const dz = drop(b); box(dp[0] - 0.08, dp[1] - 0.08, dz, 0.16, 0.16, dp[2] - 0.35, pal.metal); cyl(dp[0], dp[1], dz + dp[2] - 0.4, 0.42, 0.45, pal.pipe, flowing ? pal.blood : shade(pal.pipe, 0.6)); if (flowing && !fx.reduced) glow(P(dp[0], dp[1], dp[2]), s * 0.9, pal.blood, 0.25); if (opt.selected === b.id) sel(dp[0] - 0.6, dp[1] - 0.6, 1.2, 1.2); } });
@@ -253,6 +255,24 @@
     }
     function sel(x, y, w, dd) { ctx.save(); ctx.setLineDash([]); poly([P(x - 0.15, y - 0.15, 0), P(x + w + 0.15, y - 0.15, 0), P(x + w + 0.15, y + dd + 0.15, 0), P(x - 0.15, y + dd + 0.15, 0)], null, pal.primary, 2.5); ctx.restore(); }
     function tag(px, py, text, color) { ctx.font = `700 ${Math.max(10, s * 0.62)}px ${FONT_B}`; const w = ctx.measureText(text).width + 12, h = Math.max(16, s * 1.0); ctx.fillStyle = 'rgba(11,15,34,.92)'; ctx.fillRect(px - w / 2, py - h / 2, w, h); ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, px, py + 1); ctx.textBaseline = 'alphabetic'; }
+    // what he bought: the fan by the window, the windbreak against it, the plug-in by the bed
+    const C2 = S.counters || {};
+    if (C2.fan) items.push({ d: 12.9 + 3.0 + 0.6, f: () => {
+      box(12.65, 2.7, 0, 0.6, 0.6, 0.14, '#e3e6f2', [1.1, 0.85, 0.7]); box(12.9, 2.95, 0.14, 0.1, 0.1, 1.55, '#c9cde0');
+      const c = P(12.85, 3.0, 2.05), rx = s * 0.62, ry = s * 0.82, on = !away && S.state === 'playing';
+      ctx.save(); ctx.translate(c[0], c[1]); ctx.rotate(-0.5); ctx.fillStyle = 'rgba(227,230,242,.22)'; ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, 7); ctx.fill();
+      ctx.strokeStyle = '#e3e6f2'; ctx.lineWidth = Math.max(1.5, s * 0.07); ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, 7); ctx.stroke();
+      const spin = on && !fx.reduced ? t * 18 : 0.4; ctx.fillStyle = 'rgba(207,212,234,.75)'; for (let i = 0; i < 3; i++) { const a = spin + (i * Math.PI * 2) / 3; ctx.beginPath(); ctx.ellipse(Math.cos(a) * rx * 0.45, Math.sin(a) * ry * 0.45, rx * 0.4, ry * 0.16, a, 0, 7); ctx.fill(); }
+      ctx.fillStyle = '#8a90ad'; ctx.beginPath(); ctx.arc(0, 0, s * 0.12, 0, 7); ctx.fill(); ctx.restore();
+    } });
+    if (S.buildings.some((b) => b.type === 'windbreak')) items.push({ d: 11.7 + 3.2 + 0.4, f: () => {
+      box(11.6, 2.0, 0, 0.16, 2.3, 1.9, '#c99a5a', [1.05, 0.85, 0.7]); winR(11.76, 2.25, 4.05, 1.05, 1.5, '#e04a3a'); winR(11.76, 2.6, 3.7, 0.45, 0.8, '#f4d35e');
+    } });
+    if (C2.repellent) items.push({ d: 2.6 + 5.4 + 0.3, f: () => {
+      box(2.3, 5.2, 0, 0.7, 0.32, 0.2, '#eef0fa', [1.05, 0.85, 0.7]); box(2.55, 5.25, 0.2, 0.3, 0.22, 0.3, '#eef0fa', [1.05, 0.85, 0.7]);
+      const l = P(2.7, 5.47, 0.4); ell(l, s * 0.07, s * 0.07, away ? '#5a6b5e' : '#7be38f'); if (!away) glow(l, s * 0.6, '#7be38f', 0.4);
+    } });
+
     // the gate sign and the plant manager on his crate
     if (S.corp) items.push({ d: 0.4 + 11.3 + 2, f: () => { box(0.5, 11.3, 0, 0.1, 0.1, 1.2, pal.metal); box(2.5, 11.3, 0, 0.1, 0.1, 1.2, pal.metal); box(0.4, 11.25, 1.0, 2.3, 0.14, 1.0, pal.primary); const a = P(1.55, 11.39, 1.48); ctx.save(); ctx.translate(a[0], a[1]); ctx.transform(1, 0.5, 0, 1, 0, 0); ctx.fillStyle = pal.metalDark; ctx.font = `${s * 0.74}px ${FONT_D}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('M&A', 0, 0); ctx.restore(); ctx.textBaseline = 'alphabetic'; } });
     if (S.corp) items.push({ d: 3.3 + 10.9 + 1.2, f: () => {
@@ -272,11 +292,12 @@
     items.sort((a, b) => a.d - b.d).forEach((it) => it.f());
 
     // staff
+    const masked = S.buildings.some((b) => b.type === 'masks');
     const ws = S.workers.slice().sort((a, b) => a.pos[0] + a.pos[1] - b.pos[0] - b.pos[1]);
     for (const w of ws) {
       const bob = fx.reduced ? 0 : Math.sin(t * 5 + w.id) * 0.06, station = w.job !== 'extract';
       const flip = w.to && w.from ? (w.to[0] - w.to[1]) < (w.from[0] - w.from[1]) : w.st === 'bite' ? S.site === 'arm' : w.id % 2 === 0;
-      mosq([w.pos[0], w.pos[1], w.pos[2] + bob], clamp(40 / s, 1.4, 2.1), { carry: w.carry > 0 || (w.job === 'refine' && refining && Math.sin(t * 3 + w.id) > 0.2), flip, ph: w.id, grounded: w.st === 'bite', hat: w.job === 'hatch' ? '#f4f1ea' : w.job === 'refine' ? '#ff9d4d' : pal.hat });
+      mosq([w.pos[0], w.pos[1], w.pos[2] + bob], clamp(40 / s, 1.4, 2.1), { carry: w.carry > 0 || (w.job === 'refine' && refining && Math.sin(t * 3 + w.id) > 0.2), flip, ph: w.id, mask: masked, grounded: w.st === 'bite', hat: w.job === 'hatch' ? '#f4f1ea' : w.job === 'refine' ? '#ff9d4d' : pal.hat });
     }
     // Rhonda: the beret, the lanyard, and a belly that fills while you hold
     { const f = S.founder, fp = cine !== null ? cinePath(cine) : f.pos;
@@ -293,6 +314,13 @@
       }
     }
     if (opt.hint === 'hold' && S.state === 'playing') { const k = MA.sim.skinPoint(S), c = P(k[0], k[1] + 0.3, k[2]), q = fx.reduced ? 0.5 : (t * 1.1) % 1; ctx.lineWidth = 3; for (const d of [0, 0.5]) { const qq = (q + d) % 1; ctx.strokeStyle = rgba(pal.primary, 1 - qq); ctx.beginPath(); ctx.ellipse(c[0], c[1], s * (0.4 + qq * 1.3), s * (0.25 + qq * 0.75), 0, 0, 7); ctx.stroke(); } }
+
+    if (C2.fan && !away && S.state === 'playing' && !fx.reduced) {
+      const stop = S.buildings.some((b) => b.type === 'windbreak') ? 11.4 : 1.5; ctx.strokeStyle = 'rgba(223,229,255,.28)'; ctx.lineWidth = Math.max(1, s * 0.05); ctx.lineCap = 'round';
+      for (let i = 0; i < 9; i++) { const q = (t * 0.55 + i * 0.37) % 1, x = 12.2 - q * (12.2 - stop), y = 1.6 + ((i * 1.37) % 1) * 7.5, z = 1.2 + ((i * 0.71) % 1) * 2.4; if (x < stop + 0.2) continue; const a = P(x, y, z), b = P(x + 0.9, y, z); ctx.globalAlpha = Math.sin(q * Math.PI); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
+      ctx.globalAlpha = 1;
+    }
+    if (C2.repellent && !away && S.state === 'playing') { const k = sitePos(S).skin, c = P(k[0], k[1], k[2] - 0.6); glow(c, s * 2.8, '#7be38f', 0.22 + (fx.reduced ? 0 : 0.06 * Math.sin(t * 1.5))); }
 
     // the hand
     if (S.hev && (S.hev.kind === 'swat' || S.hev.kind === 'scratch') && !waking) {
@@ -348,9 +376,10 @@
     return best;
   }
   // which building is under a pointer (screen px)? nearest pad centre within reach
+  function sitePos(S) { return SITES[S.site]; }
   function pick(v, S, px, py) {
     let best = null, bd = Math.max(30, v.s * 2.2);
-    for (const b of S.buildings) { if (b.type === 'nest') continue; const c = b.type === 'rig' ? [SITES[S.site].rig[0] + 0.6, SITES[S.site].rig[1] + 0.5] : b.type === 'drip' ? MA.sim.storePoint(b, S) : MA.sim.padCenter(b); const p = project(v, c[0], c[1], 0.9); const dd = Math.hypot(p[0] - px, p[1] - py); if (dd < bd) { bd = dd; best = b; } }
+    for (const b of S.buildings) { if (b.type === 'nest' || b.type === 'windbreak' || b.type === 'masks') continue; const c = b.type === 'rig' ? [SITES[S.site].rig[0] + 0.6, SITES[S.site].rig[1] + 0.5] : b.type === 'drip' ? MA.sim.storePoint(b, S) : MA.sim.padCenter(b); const p = project(v, c[0], c[1], 0.9); const dd = Math.hypot(p[0] - px, p[1] - py); if (dd < bd) { bd = dd; best = b; } }
     return best;
   }
 
