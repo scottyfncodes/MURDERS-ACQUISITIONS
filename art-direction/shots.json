@@ -17,12 +17,33 @@
    }
   },
   {
+   "id": "opening",
+   "name": "The opening: 11:42 PM",
+   "kind": "moment",
+   "moment": "opening",
+   "steps": [
+    {
+     "selector": "#clock-in"
+    }
+   ],
+   "sequence": {
+    "after_ms": 5500
+   },
+   "wait_for": {
+    "js": "window.__game.state === 'opening' && window.__game.cine > 5",
+    "timeout_ms": 12000
+   }
+  },
+  {
    "id": "first-seconds",
-   "name": "First seconds of a shift",
+   "name": "First seconds of night 1",
    "kind": "play",
    "steps": [
     {
      "selector": "#clock-in"
+    },
+    {
+     "selector": "#skip"
     }
    ],
    "wait_for": {
@@ -31,19 +52,43 @@
    }
   },
   {
+   "id": "first-bite",
+   "name": "Rhonda drinking",
+   "kind": "moment",
+   "moment": "first-bite",
+   "steps": [
+    {
+     "selector": "#clock-in"
+    },
+    {
+     "selector": "#skip"
+    },
+    {
+     "eval": "window.__game.debug.hold(true)"
+    }
+   ],
+   "wait_for": {
+    "js": "window.__game.founder === 'drink' && window.__game.belly > 2",
+    "timeout_ms": 8000
+   }
+  },
+  {
    "id": "mid-play",
-   "name": "Mid-shift, plant running",
+   "name": "A small colony running",
    "kind": "play",
    "steps": [
     {
      "selector": "#clock-in"
     },
     {
+     "selector": "#skip"
+    },
+    {
      "eval": "window.__game.debug.preset('mid')"
     }
    ],
    "wait_for": {
-    "js": "window.__game.state === 'playing' && window.__game.workers >= 20 && window.__game.buildings >= 5",
+    "js": "window.__game.state === 'playing' && window.__game.workers >= 6 && window.__game.buildings >= 5",
     "timeout_ms": 8000
    }
   },
@@ -55,6 +100,9 @@
    "steps": [
     {
      "selector": "#clock-in"
+    },
+    {
+     "selector": "#skip"
     },
     {
      "eval": "window.__game.debug.preset('mid')"
@@ -75,30 +123,6 @@
    }
   },
   {
-   "id": "quota-met",
-   "name": "Quota met, policy pick",
-   "kind": "moment",
-   "moment": "quota-met",
-   "steps": [
-    {
-     "selector": "#clock-in"
-    },
-    {
-     "eval": "window.__game.debug.preset('mid')"
-    },
-    {
-     "eval": "window.__game.debug.trigger('quota')"
-    }
-   ],
-   "sequence": {
-    "after_ms": 1400
-   },
-   "wait_for": {
-    "selector": "#quota-stamp[data-show]",
-    "timeout_ms": 8000
-   }
-  },
-  {
    "id": "wake-up",
    "name": "The alarm: the sleeper wakes",
    "kind": "fail",
@@ -106,6 +130,9 @@
    "steps": [
     {
      "selector": "#clock-in"
+    },
+    {
+     "selector": "#skip"
     },
     {
      "eval": "window.__game.debug.preset('mid')"
@@ -123,12 +150,15 @@
    }
   },
   {
-   "id": "review",
-   "name": "Performance review",
+   "id": "morning",
+   "name": "The first morning",
    "kind": "results",
    "steps": [
     {
      "selector": "#clock-in"
+    },
+    {
+     "selector": "#skip"
     },
     {
      "eval": "window.__game.debug.preset('mid')"

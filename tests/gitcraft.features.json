@@ -2,8 +2,8 @@
  "_how": "Steps: {press: 'Space'}, {hold: 'ArrowRight', ms: 500}, {tap: [x, y]}, {wait: 300}, {assert: '<js>', name: '...'}.",
  "features": [
   {
-   "name": "clocks in from the title screen",
-   "requirement": "start screen \u2192 play",
+   "name": "the opening plays once, and can be skipped",
+   "requirement": "short atmospheric opening, skippable immediately",
    "steps": [
     {
      "assert": "window.__game.state === 'title'",
@@ -13,49 +13,108 @@
      "press": "Enter"
     },
     {
+     "wait": 400
+    },
+    {
+     "assert": "window.__game.state === 'opening'",
+     "name": "a first visit opens on the bedroom at 11:41 PM"
+    },
+    {
+     "press": "Escape"
+    },
+    {
      "wait": 300
     },
     {
-     "assert": "window.__game.state === 'playing'",
-     "name": "Enter clocks in"
+     "assert": "window.__game.state === 'playing' && window.__game.night === 1",
+     "name": "skipping lands in night 1"
     }
    ]
   },
   {
-   "name": "builds within the first seconds",
-   "requirement": "build and upgrade factory buildings",
+   "name": "the first bite is by hand",
+   "requirement": "first manual blood extraction",
    "steps": [
     {
      "press": "Enter"
     },
     {
      "wait": 300
+    },
+    {
+     "press": "Escape"
+    },
+    {
+     "wait": 300
+    },
+    {
+     "assert": "window.__game.buildings === 0 && window.__game.workers === 0",
+     "name": "no prebuilt infrastructure, no staff"
+    },
+    {
+     "hold": "b",
+     "ms": 2600
+    },
+    {
+     "wait": 1600
+    },
+    {
+     "assert": "window.__game.score > 0 && window.__game.bank > 0",
+     "name": "holding bites, letting go brings the blood home"
+    }
+   ]
+  },
+  {
+   "name": "storage is the first building, placed by the player",
+   "requirement": "buildings emerge from needs; player-selected placement",
+   "steps": [
+    {
+     "press": "Enter"
+    },
+    {
+     "wait": 300
+    },
+    {
+     "press": "Escape"
+    },
+    {
+     "wait": 300
+    },
+    {
+     "assert": "!window.__game.unlocked.includes('tank')",
+     "name": "no build cards until something is needed"
+    },
+    {
+     "assert": "(window.__game.debug.bank(30), true)",
+     "name": "fill the bottle cap"
+    },
+    {
+     "wait": 300
+    },
+    {
+     "assert": "window.__game.unlocked.includes('tank')",
+     "name": "a full cap unlocks the storage tank"
     },
     {
      "press": "1"
     },
     {
-     "wait": 400
+     "wait": 200
     },
     {
-     "assert": "window.__game.buildings === 4",
-     "name": "a storage tank is built from the starting bank"
-    }
-   ]
-  },
-  {
-   "name": "the crew extracts and the bank grows",
-   "requirement": "harvest \u2192 process loop",
-   "steps": [
-    {
-     "press": "Enter"
+     "assert": "window.__game.placing === 'tank'",
+     "name": "the card asks where"
     },
     {
-     "wait": 9000
+     "assert": "(window.__game.debug.placeBest(), true)",
+     "name": "place it"
     },
     {
-     "assert": "window.__game.score > 0 && window.__game.bank > 50",
-     "name": "blood is extracted and refined into the bank"
+     "wait": 300
+    },
+    {
+     "assert": "window.__game.buildings === 1 && window.__game.placing === null",
+     "name": "the tank is built where it was placed"
     }
    ]
   },
@@ -67,7 +126,13 @@
      "press": "Enter"
     },
     {
-     "wait": 500
+     "wait": 300
+    },
+    {
+     "press": "Escape"
+    },
+    {
+     "wait": 300
     },
     {
      "press": "p"
@@ -92,8 +157,8 @@
    ]
   },
   {
-   "name": "the shift ends in a performance review",
-   "requirement": "round ends with a performance report",
+   "name": "the night ends in a morning, and the colony carries over",
+   "requirement": "finite nights; persistent colony",
    "steps": [
     {
      "press": "Enter"
@@ -102,15 +167,32 @@
      "wait": 300
     },
     {
-     "assert": "(window.__game.debug.trigger('wake'), true)",
+     "press": "Escape"
+    },
+    {
+     "wait": 300
+    },
+    {
+     "assert": "(window.__game.debug.preset('mid'), window.__game.debug.trigger('wake'), true)",
      "name": "alarm"
     },
     {
-     "wait": 4000
+     "wait": 4200
     },
     {
      "assert": "window.__game.state === 'over' && !document.getElementById('review').hidden",
-     "name": "review is shown"
+     "name": "the morning sheet is shown"
+    },
+    {
+     "assert": "(document.getElementById('again').click(), true)",
+     "name": "night 2"
+    },
+    {
+     "wait": 400
+    },
+    {
+     "assert": "window.__game.night === 2 && window.__game.buildings >= 5 && window.__game.workers >= 6",
+     "name": "night 2 starts with last night's colony"
     }
    ]
   }

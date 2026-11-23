@@ -1,131 +1,186 @@
-// Boot, the frame loop, input and the HUD. The rules live in sim.js, the picture in render.js.
+// Boot, the frame loop, input and the HUD. The rules live in sim.js and campaign.js, the picture in render.js.
 (function () {
   'use strict';
-  const MA = window.MA, C = MA.config, sim = MA.sim, R = MA.render, audio = MA.audio;
+  const MA = window.MA, C = MA.config, sim = MA.sim, R = MA.render, audio = MA.audio, K = MA.campaign;
   const $ = (id) => document.getElementById(id);
   const fmt = (n) => Math.round(n).toLocaleString('en-US');
   const errorBox = $('error');
-  function fail(msg) { errorBox.textContent = `Something went wrong: ${msg}. Reload to restart the shift.`; errorBox.hidden = false; }
+  function fail(msg) { errorBox.textContent = `Something went wrong: ${msg}. Reload to pick up from the start of this night.`; errorBox.hidden = false; }
   window.addEventListener('error', (e) => fail(e.message || 'unknown error'));
   window.addEventListener('unhandledrejection', (e) => fail((e.reason && e.reason.message) || 'unknown error'));
 
-  // ---------- saved progress (validated on the way in: storage is user-editable) ----------
-  const SAVE_KEY = 'murders-acquisitions.v1';
-  const num = (v, d) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : d);
-  function loadSave() {
-    const base = { shifts: 0, best: null, reviews: [], muted: false, lastSleeper: -1, seenHint: false, career: 0 };
-    try {
-      const raw = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); if (!raw || typeof raw !== 'object') return base;
-      const rev = (r) => r && typeof r === 'object' && typeof r.rating === 'string' ? { shiftNo: num(r.shiftNo, 1), sleeper: String(r.sleeper || '').slice(0, 60), rating: r.rating.slice(0, 40), score: num(r.score, 0), extracted: num(r.extracted, 0), pct: num(r.pct, 0), casualties: num(r.casualties, 0) } : null;
-      return { shifts: num(raw.shifts, 0), best: rev(raw.best), reviews: Array.isArray(raw.reviews) ? raw.reviews.map(rev).filter(Boolean).slice(0, 8) : [], muted: raw.muted === true, lastSleeper: num(raw.lastSleeper, -1), seenHint: raw.seenHint === true, career: Math.min(num(raw.career, 0), 1e6) };
-    } catch (e) { return base; }
-  }
-  function store() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* private mode: play on without saving */ } }
-  const save = loadSave();
-  const rankOf = (pts) => { let i = 0; C.RANKS.forEach((r, k) => { if (pts >= r[0]) i = k; }); return i; };
+  // ---------- saved progress: v2 holds the colony; v1 is read once for settings and records, never written ----------
+  function readJSON(key) { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; } }
+  function store() { try { localStorage.setItem(K.V2_KEY, JSON.stringify(save)); } catch (e) { /* private mode: play on without saving */ } }
+  const saved2 = readJSON(K.V2_KEY);
+  const save = saved2 ? K.fromSave(saved2) : K.migrateV1(readJSON(K.V1_KEY));
+  if (!saved2) store();
 
   // ---------- state ----------
   const cv = $('game'), ctx = cv.getContext('2d');
-  const G = { mode: 'title', S: null, demo: null, paused: false, selected: null, tab: 'build', hitStop: 0, acc: 0, last: 0, shown: {}, memoQ: [], memoUntil: 0, modal: null, rosterDirty: true, uiAt: 0, fxName: null };
+  const fresh = new Set(); // cards unlocked but not yet tapped: they pulse once, not every night
+  const G = { mode: 'title', S: null, demo: null, paused: false, selected: null, placing: null, hitStop: 0, slow: 0, acc: 0, last: 0, shown: {}, memoQ: [], memoUntil: 0, modal: null, uiAt: 0, cineT: 0, base: null, cam: null, punch: null, press: null, cardsKey: '', idleAt: 0, hireAt: -99 };
   R.fx.reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function fit() { const d = Math.min(2, window.devicePixelRatio || 1); cv.width = Math.round(innerWidth * d); cv.height = Math.round(innerHeight * d); ctx.setTransform(d, 0, 0, d, 0, 0); }
   addEventListener('resize', fit); fit();
 
-  function preset(S, quiet) {
-    S.bank = 1e6; ['tank', 'pool', 'hatchery', 'refinery', 'rig', 'pool', 'tank'].forEach((t) => sim.build(S, t));
-    while (S.workers.length < 24) sim.hire(S, true);
-    sim.setStaff(S, 'refine', 6); sim.setStaff(S, 'hatch', 2);
-    S.time = 80; S.buildings.forEach((b) => (b.born = 0)); S.extracted = 620; S.taken = 620; S.refined = 560; S.quarter = 1; S.quotasMet = 1; S.policies = ['ergonomic']; S.mods.bite *= 0.75;
-    S.flags.firstBuild = S.flags.swatMemo = true; S.stats.idleMemoAt = 1e9; S.eventCd = 1e9; S.schedule.forEach((e) => (e.done = true));
-    for (let i = 0; i < 240; i++) { sim.step(S, 1 / 30); S.irritation = Math.min(S.irritation, 24); S.offer = null; }
-    S.bank = quiet ? 0 : 184; S.raw = 96; S.irritation = 24; S.events.length = 0; S.eventCd = quiet ? 1e9 : 6; S.stats.idleMemoAt = S.time + 20; S.stats.queuedSeconds = 0;
-    return S;
-  }
-  function makeDemo() { const S = sim.newShift({ seed: 11, sleeper: 0 }); S.demo = true; return preset(S, true); }
+  function makeDemo() { const S = sim.newNight(K.cleanCampaign(save.campaign), { seed: 11 }); S.demo = true; S.events.length = 0; return S; }
   G.demo = makeDemo();
 
-  // ---------- shift lifecycle ----------
+  // ---------- night lifecycle ----------
   function clockIn() {
     audio.start(); audio.play('click');
-    let sl = 0; if (save.shifts > 0) { do { sl = (Math.random() * C.SLEEPERS.length) | 0; } while (sl === save.lastSleeper && C.SLEEPERS.length > 1); }
-    G.S = sim.newShift({ sleeper: sl, shiftNo: save.shifts + 1, rank: rankOf(save.career) }); save.lastSleeper = sl;
-    G.mode = 'play'; G.paused = false; G.selected = null; G.acc = 0; G.memoQ = []; G.memoUntil = 0; G.shown = {}; G.rosterDirty = true; R.fx.parts.length = 0; R.fx.labels.length = 0;
-    document.body.classList.remove('is-title', 'morning'); $('hud').hidden = false; $('quota-stamp').hidden = true;
-    closeModal(); setTab('build'); drainEvents(); if (!save.seenHint) G.memoQ.unshift({ text: 'Welcome aboard. Tap a card below to build. The crew does the rest.', tone: 'warn' });
+    if (!save.settings.seenOpening && save.campaign.night === 1) startOpening(); else startNight();
   }
-  function toTitle() { G.mode = 'title'; G.S = null; G.demo = makeDemo(); closeModal(); document.body.classList.add('is-title'); document.body.classList.remove('morning'); $('hud').hidden = true; $('quota-stamp').hidden = true; titleStatus(); }
-  function titleStatus() { $('title-status').textContent = save.best ? `${C.RANKS[rankOf(save.career)][1]} · Shift ${save.shifts + 1} · Best ${fmt(save.best.extracted)} mL` : 'Shift 1 · Subject asleep since 11:42 PM'; }
+  function startOpening() {
+    G.mode = 'opening'; G.cineT = 0; G.S = sim.newNight(save.campaign, {}); G.S.events.length = 0; G.cam = null;
+    document.body.classList.remove('is-title', 'morning'); document.body.classList.add('is-cine'); $('hud').hidden = true; $('cine').hidden = false; caption(0, true);
+  }
+  function endOpening() {
+    if (G.mode !== 'opening') return;
+    save.settings.seenOpening = true; store(); $('cine').hidden = true; document.body.classList.remove('is-cine');
+    startNight(G.S);
+  }
+  function startNight(S) {
+    G.S = S || sim.newNight(save.campaign, {}); store();
+    G.mode = 'play'; G.paused = false; G.selected = null; G.placing = null; G.acc = 0; G.memoQ = []; G.memoUntil = 0; G.shown = {}; G.cardsKey = ''; G.punch = null; G.slow = 0; G.idleAt = 0; G.hireAt = -99;
+    R.fx.parts.length = 0; R.fx.labels.length = 0;
+    document.body.classList.remove('is-title', 'morning', 'is-cine'); $('hud').hidden = false; $('memo').hidden = true;
+    closeModal(); renderPanel(); drainEvents(); updateHud(0, performance.now() / 1000);
+  }
+  function toTitle() { G.mode = 'title'; G.S = null; G.demo = makeDemo(); G.cam = null; closeModal(); document.body.classList.add('is-title'); document.body.classList.remove('morning', 'is-cine'); $('hud').hidden = true; $('cine').hidden = true; titleStatus(); }
+  function titleStatus() {
+    const c = save.campaign;
+    $('title-status').textContent = c.night === 1 && !c.workers.length ? 'Night 1 · Subject asleep since 11:42 PM' : `Night ${c.night} · ${c.workers.length} on payroll · ${fmt(c.bank)} mL stored`;
+  }
+
+  // ---------- the opening ----------
+  function caption(t, force) {
+    let i = 0; C.OPENING.forEach((c, k) => { if (t >= c.at) i = k; });
+    if (!force && G.shown.cap === i) return; G.shown.cap = i;
+    const c = C.OPENING[i], el = $('cine-cap'); $('cine-time').textContent = c.time; $('cine-line').textContent = c.line;
+    el.classList.remove('in'); void el.offsetWidth; el.classList.add('in');
+  }
+  function cineCam(t) {
+    if (t < 4.5) return { f: [3.6, 3.4, 5.2], z: 2.5, k: 1 };
+    if (t < 8.2) return { f: [3.8, 3.6, 5.0], z: 2.1, k: 1 };
+    if (t < 12.6) return { f: [8.2, 4.2, 3.4], z: 1.35, k: 0.9 };
+    return playCam(G.S);
+  }
 
   // ---------- modals ----------
   function openModal(id) { closeModal(true); G.modal = id; const el = $(id); el.hidden = false; const b = el.querySelector('button'); if (b) b.focus({ preventScroll: true }); if (id === 'handbook') el.setAttribute('data-open', ''); }
-  function closeModal(keepPause) { if (!G.modal) return; const el = $(G.modal); el.hidden = true; el.removeAttribute('data-open'); el.removeAttribute('data-ready'); const was = G.modal; G.modal = null; if (!keepPause && (was === 'handbook') && G.paused && G.mode === 'play') openModal('pause-menu'); }
-  function setPaused(p) { if (G.mode !== 'play' || !G.S || G.S.state !== 'playing') return; G.paused = p; audio.hold(p); if (p) openModal('pause-menu'); else if (G.modal === 'pause-menu') closeModal(true); }
+  function closeModal(keepPause) { if (!G.modal) return; const el = $(G.modal); el.hidden = true; el.removeAttribute('data-open'); el.removeAttribute('data-ready'); const was = G.modal; G.modal = null; if (!keepPause && was === 'handbook' && G.paused && G.mode === 'play') openModal('pause-menu'); }
+  function setPaused(p) { if (G.mode !== 'play' || !G.S || G.S.state !== 'playing') return; G.paused = p; G.S.hold = false; audio.hold(p); if (p) openModal('pause-menu'); else if (G.modal === 'pause-menu') closeModal(true); }
 
   $('handbook-list').innerHTML = C.HANDBOOK.map(([h, t]) => `<li><b>${h}.</b> ${t}</li>`).join('');
-  function showReviews() {
-    $('reviews-sub').textContent = save.reviews.length ? `Best on file: ${save.best.rating}, ${fmt(save.best.extracted)} mL (${save.best.pct}% of supply).` : 'Your file is empty. Clock in to start one.';
-    $('reviews-list').innerHTML = ''; for (const r of save.reviews) { const li = document.createElement('li'); const b = document.createElement('b'); b.textContent = `Shift ${r.shiftNo} · ${r.rating}`; const s = document.createElement('span'); s.textContent = `${r.sleeper} · ${fmt(r.extracted)} mL · ${r.pct}% · ${r.casualties} lost`; const i = document.createElement('i'); i.textContent = r.score; li.append(b, i, s); $('reviews-list').append(li); }
+  function li(head, right, sub) { const el = document.createElement('li'), b = document.createElement('b'), s = document.createElement('span'), i = document.createElement('i'); b.textContent = head; s.textContent = sub; i.textContent = right; el.append(b, i, s); return el; }
+  function showRecords() {
+    const c = save.campaign, list = $('reviews-list'), old = $('archive-list'); list.innerHTML = ''; old.innerHTML = '';
+    $('reviews-sub').textContent = c.history.length ? `${c.totals.nights} night${c.totals.nights === 1 ? '' : 's'} on file · ${fmt(c.totals.extracted)} mL collected · ${c.lost.length} lost` : 'The company has no records yet. Clock in to start one.';
+    for (const h of c.history) list.append(li(`Night ${h.night}`, `${fmt(h.extracted)}`, `${fmt(h.extracted)} mL · ${h.staff} on payroll · ${h.lost} lost`));
+    const a = save.archive; $('archive').hidden = !a;
+    if (a) { $('archive-sub').textContent = `${a.shifts} shift${a.shifts === 1 ? '' : 's'} at Plant No. 1${a.best ? ` · best: ${a.best.rating}` : ''}.`; for (const r of a.reviews) old.append(li(`Shift ${r.shiftNo} · ${r.rating}`, String(r.score), `${r.sleeper} · ${fmt(r.extracted)} mL · ${r.casualties} lost`)); }
     openModal('reviews');
   }
 
-  // ---------- HUD wiring ----------
-  const set = (id, v) => { if (G.shown[id] !== v) { G.shown[id] = v; $(id).textContent = v; } };
+  // ---------- the build panel: one card per unlocked building, or the placement prompt ----------
   const cards = {};
-  function buildCards() {
-    const p = $('panel-build'); p.innerHTML = '';
-    C.BUILD_ORDER.forEach((type, i) => { const def = C.BUILDINGS[type], b = document.createElement('button'); b.type = 'button'; b.className = 'card'; b.id = `build-${type}`; b.innerHTML = `<b>${def.name}</b><small>${def.gain}</small><span></span>`; b.addEventListener('click', () => { audio.start(); if (G.S) sim.build(G.S, type); drainEvents(); }); b.title = `${def.blurb} (${i + 1})`; p.append(b); cards[type] = b; });
+  function renderPanel() {
+    const S = G.S, p = $('panel-build'); if (!S) return;
+    const types = C.BUILD_ORDER.filter((t) => S.unlocked.includes(t));
+    p.hidden = types.length === 0; G.cardsKey = types.join(',') + '|' + (G.placing || '') + '|' + (G.selected || '');
+    p.innerHTML = ''; for (const k in cards) delete cards[k];
+    if (G.placing) {
+      const def = C.BUILDINGS[G.placing];
+      p.innerHTML = `<div class="inspector placing"><span><b>Place the ${def.name.toLowerCase()}</b><small>Tap a glowing spot. Brighter means a shorter trip to the bite.</small></span><button type="button" class="x" id="cancel-place" aria-label="Cancel">×</button></div>`;
+      $('cancel-place').addEventListener('click', () => { G.placing = null; audio.play('click'); renderPanel(); });
+      return;
+    }
+    const sb = G.selected && S.buildings.find((x) => x.id === G.selected);
+    if (sb) {
+      const def = C.BUILDINGS[sb.type], cost = sim.upgradeCost(sb), extra = sb.type === 'tank' || sb.type === 'nest' ? ` · trip ${sim.tripSeconds(S, sb).toFixed(1)} s` : '';
+      p.innerHTML = `<div class="inspector"><span><b>${def.name} · Lv ${sb.level}</b><small>${def.effect(sb.level)}${extra}. ${def.blurb}</small></span><button type="button" class="up" id="upgrade" ${cost === Infinity ? 'disabled' : ''}>${cost === Infinity ? 'Fully upgraded' : `Upgrade · ${fmt(cost)} mL`}</button><button type="button" class="x" id="deselect" aria-label="Close">×</button></div>`;
+      $('upgrade').addEventListener('click', () => { sim.upgrade(S, sb.id); drainEvents(); renderPanel(); });
+      $('deselect').addEventListener('click', () => { G.selected = null; audio.play('click'); renderPanel(); });
+      return;
+    }
+    types.forEach((type, i) => {
+      const def = C.BUILDINGS[type], b = document.createElement('button'); b.type = 'button'; b.className = 'card'; b.id = `build-${type}`;
+      b.innerHTML = `<b>${def.name}</b><small>${def.gain}</small><span></span>`; b.title = `${def.blurb} (${i + 1})`;
+      if (fresh.has(type)) b.classList.add('fresh');
+      b.addEventListener('click', () => pickCard(type)); p.append(b); cards[type] = b;
+    });
+    updateCards();
   }
+  function pickCard(type) {
+    const S = G.S; if (!S || S.state !== 'playing') return; audio.start(); if (fresh.delete(type)) G.cardsKey = '';
+    const cost = sim.costOf(S, type);
+    if (!(cost <= S.bank)) { S.events.push({ type: 'deny', what: type, cost }); drainEvents(); return; }
+    if (C.BUILDINGS[type].single) { sim.build(S, type); drainEvents(); return; }
+    audio.play('click'); G.selected = null; G.placing = type; renderPanel();
+  }
+  function placeAt(pad) { const S = G.S, type = G.placing; if (!S || !type) return; G.placing = null; sim.build(S, type, pad); drainEvents(); renderPanel(); }
   function updateCards() {
     const S = G.S, d = sim.derived(S);
-    for (const type of C.BUILD_ORDER) {
-      const def = C.BUILDINGS[type], cost = sim.costOf(S, type), el = cards[type]; if (!el.isConnected) return;
-      const lvl = def.single ? S.buildings.find((b) => b.type === type).level : 0;
-      const sub = def.gain;
-      const own = def.single ? `Lv ${lvl}` : `×${d.counts[type]}`;
+    for (const type in cards) {
+      const def = C.BUILDINGS[type], cost = sim.costOf(S, type), el = cards[type];
+      const own = def.single ? (d.rigLevel ? `Lv ${d.rigLevel}` : 'new') : d.counts[type] ? `×${d.counts[type]}` : 'new';
       const price = cost === Infinity ? (def.single ? `Max · ${own}` : `No room · ${own}`) : `${fmt(cost)} mL · ${own}`;
-      if (el._sub !== sub) { el._sub = sub; el.children[1].textContent = sub; } if (el._price !== price) { el._price = price; el.children[2].textContent = price; }
-      el.classList.toggle('can', cost <= S.bank); el.classList.toggle('nudge', !save.seenHint && cost <= S.bank && (type === 'tank' || type === 'pool'));
+      if (el._price !== price) { el._price = price; el.children[2].textContent = price; }
+      el.classList.toggle('can', cost <= S.bank);
     }
   }
-  function showInspector() {
-    const S = G.S, b = S && S.buildings.find((x) => x.id === G.selected), p = $('panel-build');
-    if (!b) { G.selected = null; if (!cards.tank || !cards.tank.isConnected) buildCards(); return; }
-    const def = C.BUILDINGS[b.type], cost = sim.upgradeCost(b);
-    p.innerHTML = `<div class="inspector"><span><b>${def.name} · Lv ${b.level}</b><small>${def.effect(b.level)}. ${def.blurb}</small></span><button type="button" class="up" id="upgrade" ${cost === Infinity ? 'disabled' : ''}>${cost === Infinity ? 'Fully upgraded' : `Upgrade · ${fmt(cost)} mL`}</button><button type="button" class="x" id="deselect" aria-label="Close">×</button></div>`;
-    $('upgrade').addEventListener('click', () => { sim.upgrade(S, b.id); drainEvents(); showInspector(); });
-    $('deselect').addEventListener('click', () => { G.selected = null; buildCards(); updateCards(); });
+
+  // ---------- input: press and hold anywhere to bite; a quick tap on a building inspects it ----------
+  function inPlay() { return G.mode === 'play' && G.S && G.S.state === 'playing' && !G.modal && !G.paused; }
+  cv.addEventListener('contextmenu', (e) => e.preventDefault());
+  cv.addEventListener('pointerdown', (e) => {
+    audio.start();
+    if (G.mode === 'opening') { endOpening(); return; }
+    if (!inPlay()) return;
+    if (G.placing) { const pad = R.pickPad(view(), G.S, e.clientX, e.clientY); if (pad >= 0) placeAt(pad); else audio.play('deny'); return; }
+    G.press = { id: e.pointerId, x: e.clientX, y: e.clientY, at: performance.now() };
+    try { cv.setPointerCapture(e.pointerId); } catch (err) { /* older browsers */ }
+    sim.setHold(G.S, true);
+  });
+  function release(e) {
+    const p = G.press; if (!p || (e && e.pointerId !== p.id)) return; G.press = null;
+    if (G.S) sim.setHold(G.S, false);
+    if (e && inPlay() && performance.now() - p.at < 260 && Math.hypot(e.clientX - p.x, e.clientY - p.y) < 14) {
+      const b = R.pick(view(), G.S, e.clientX, e.clientY);
+      if (b) { G.selected = b.id; audio.play('click'); renderPanel(); } else if (G.selected) { G.selected = null; renderPanel(); }
+    }
   }
-  function setTab(t) { G.tab = t; for (const k of ['build', 'staff', 'roster']) { $(`tab-${k}`).setAttribute('aria-selected', String(k === t)); $(`panel-${k}`).hidden = k !== t; } $(`tab-${t}`).classList.remove('nudge'); if (t === 'build') { if (G.selected) showInspector(); else buildCards(); if (G.S) updateCards(); } G.rosterDirty = true; }
-  ['build', 'staff', 'roster'].forEach((k) => $(`tab-${k}`).addEventListener('click', () => { audio.play('click'); setTab(k); }));
-  function stepStaff(job, dn) { const S = G.S; if (!S) return; const before = S.staff[job]; sim.setStaff(S, job, before + dn); audio.play(S.staff[job] === before ? 'deny' : 'click'); G.rosterDirty = true; }
-  $('refine-less').addEventListener('click', () => stepStaff('refine', -1)); $('refine-more').addEventListener('click', () => stepStaff('refine', 1));
-  $('hatch-less').addEventListener('click', () => stepStaff('hatch', -1)); $('hatch-more').addEventListener('click', () => stepStaff('hatch', 1));
-  $('hiring').addEventListener('click', () => { if (!G.S) return; sim.setHiring(G.S, !G.S.hiring); audio.play('click'); drainEvents(); });
-  [0, 1, 2].forEach((i) => $(`pace-${i}`).addEventListener('click', () => { if (!G.S) return; sim.setPace(G.S, i); audio.play('click'); }));
+  cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', release); cv.addEventListener('lostpointercapture', release);
+
   $('recall').addEventListener('click', () => { if (G.S) { sim.recall(G.S); drainEvents(); } });
   $('pause').addEventListener('click', () => setPaused(true)); $('resume').addEventListener('click', () => setPaused(false));
-  $('mute').addEventListener('click', () => { save.muted = !save.muted; applyMute(); store(); });
-  function applyMute() { audio.setMuted(save.muted); $('mute').setAttribute('aria-pressed', String(save.muted)); $('mute').setAttribute('aria-label', save.muted ? 'Unmute sound' : 'Mute sound'); }
-  $('clock-in').addEventListener('click', clockIn); $('again').addEventListener('click', clockIn); $('to-title').addEventListener('click', toTitle);
+  $('mute').addEventListener('click', () => { save.settings.muted = !save.settings.muted; applyMute(); store(); });
+  function applyMute() { audio.setMuted(save.settings.muted); $('mute').setAttribute('aria-pressed', String(save.settings.muted)); $('mute').setAttribute('aria-label', save.settings.muted ? 'Unmute sound' : 'Mute sound'); }
+  $('clock-in').addEventListener('click', clockIn); $('again').addEventListener('click', () => { audio.start(); audio.play('click'); startNight(); }); $('to-title').addEventListener('click', toTitle);
+  $('skip').addEventListener('click', (e) => { e.stopPropagation(); audio.start(); endOpening(); });
+  $('cine').addEventListener('pointerdown', () => { audio.start(); endOpening(); });
   $('open-handbook').addEventListener('click', () => { audio.start(); audio.play('click'); openModal('handbook'); }); $('pause-handbook').addEventListener('click', () => openModal('handbook'));
-  $('close-handbook').addEventListener('click', () => closeModal()); $('open-reviews').addEventListener('click', () => { audio.start(); audio.play('click'); showReviews(); }); $('close-reviews').addEventListener('click', () => closeModal());
+  $('close-handbook').addEventListener('click', () => closeModal()); $('open-reviews').addEventListener('click', () => { audio.start(); audio.play('click'); showRecords(); }); $('close-reviews').addEventListener('click', () => closeModal());
   $('clock-out').addEventListener('click', () => { G.paused = false; audio.hold(false); closeModal(true); sim.wake(G.S); drainEvents(); });
 
-  cv.addEventListener('pointerdown', (e) => {
-    audio.start(); if (G.mode !== 'play' || !G.S || G.S.state !== 'playing' || G.modal) return;
-    const b = R.pick(view(), G.S, e.clientX, e.clientY); G.selected = b ? b.id : null; audio.play('click'); setTab('build');
-  });
   addEventListener('keydown', (e) => {
-    if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return; const k = e.key.toLowerCase();
+    if (e.metaKey || e.ctrlKey || e.altKey) return; const k = e.key.toLowerCase();
+    if (G.mode === 'opening') { if (!e.repeat && (k === 'escape' || k === 'enter' || k === ' ')) { e.preventDefault(); endOpening(); } return; }
+    if (e.repeat) return;
     if (k === 'm') { $('mute').click(); return; }
-    if (k === 'escape') { if (G.modal === 'pause-menu') setPaused(false); else if (G.modal === 'handbook' || G.modal === 'reviews') closeModal(); else if (G.mode === 'play') setPaused(true); return; }
+    if (k === 'escape') { if (G.modal === 'pause-menu') setPaused(false); else if (G.modal === 'handbook' || G.modal === 'reviews') closeModal(); else if (G.placing) { G.placing = null; renderPanel(); } else if (G.mode === 'play') setPaused(true); return; }
     if (G.modal) return;
     if (G.mode === 'title') { if ((k === ' ' || k === 'enter') && document.activeElement.tagName !== 'BUTTON') { e.preventDefault(); clockIn(); } return; }
     if (k === 'p') setPaused(!G.paused);
-    else if (k === ' ') { e.preventDefault(); $('recall').click(); }
-    else if (k >= '1' && k <= '5' && G.S) { sim.build(G.S, C.BUILD_ORDER[Number(k) - 1]); drainEvents(); }
+    else if (k === 'b' && inPlay()) sim.setHold(G.S, true);
+    else if (k === ' ') { e.preventDefault(); if (G.S && G.S.unlocked.includes('scatter')) $('recall').click(); }
+    else if (k >= '1' && k <= '3' && G.S) { const t = C.BUILD_ORDER.filter((x) => G.S.unlocked.includes(x))[Number(k) - 1]; if (t) pickCard(t); }
   });
+  addEventListener('keyup', (e) => { if (e.key.toLowerCase() === 'b' && G.S) sim.setHold(G.S, false); });
+  addEventListener('blur', () => { if (G.S) sim.setHold(G.S, false); G.press = null; });
   document.addEventListener('visibilitychange', () => { if (document.hidden && G.mode === 'play' && !G.paused) setPaused(true); });
 
   // ---------- events from the sim: every one answers on screen and in sound ----------
@@ -135,114 +190,154 @@
     for (const e of S.events) {
       R.onEvent(S, e);
       switch (e.type) {
-        case 'memo': if (e.tone === 'idle' && G.memoQ.length) break; if (e.tone === 'loss' || e.tone === 'warn') G.memoUntil = 0; G.memoQ.push(e); break;
-        case 'build': audio.play('coin'); setTimeout(() => audio.play('thud'), C.FEEL.build_drop_ms); flash('p-bank', 'pulse'); if (!save.seenHint) { save.seenHint = true; store(); G.memoUntil = 0; } if (e.b.type === 'hatchery' && !e.upgrade) $('tab-staff').classList.add('nudge'); if (G.selected) showInspector(); G.rosterDirty = true; break;
-        case 'deny': audio.play('deny'); if (e.what === 'recall') flash('recall', 'deny'); else { flash('p-bank', 'deny'); const c = cards[e.what]; if (c && c.isConnected) { c.classList.remove('deny'); void c.offsetWidth; c.classList.add('deny'); } } break;
-        case 'deliver': audio.play('plip', 0.09); break;
+        case 'memo': if (e.tone === 'idle' && G.memoQ.length) break; if (e.tone === 'idle' || e.tone === 'info') G.memoQ.push(e); else { G.memoQ = [e]; G.memoUntil = 0; } break;
+        case 'unlock': if (e.what === 'scatter') { $('recall').hidden = false; flash('recall', 'arrive'); } else { audio.play('hatch'); fresh.add(e.what); } G.cardsKey = ''; break;
+        case 'build': audio.play('coin'); setTimeout(() => audio.play('thud'), C.FEEL.build_drop_ms); flash('p-bank', 'pulse'); G.cardsKey = ''; break;
+        case 'deny': audio.play('deny'); if (e.what === 'recall') flash('recall', 'deny'); else if (e.what === 'full') { flash('p-bank', 'deny'); } else if (cards[e.what]) { const c = cards[e.what]; c.classList.remove('deny'); void c.offsetWidth; c.classList.add('deny'); flash('p-bank', 'deny'); } break;
+        case 'deliver': audio.play(e.founder ? 'plip' : 'plip', e.founder ? 0 : 0.09); if (e.first) audio.play('hatch'); if (e.founder) flash('p-bank', 'pulse'); break;
+        case 'takeoff': audio.play('buzz', 0.2); break;
+        case 'full': audio.play('click'); break;
         case 'telegraph': if (e.kind === 'swat' || e.kind === 'scratch') { audio.play('warn'); $('recall').classList.add('alarm'); } break;
-        case 'impact': $('recall').classList.remove('alarm'); if (e.kind === 'swat' || e.kind === 'scratch') { audio.play('hit'); if (e.kind === 'swat' && !R.fx.reduced) G.hitStop = C.FEEL.hit_stop_ms / 1000; flash('p-clock', 'pulse'); if (e.dead.length) { flash('p-lost', 'pulse'); $('p-lost').classList.add('hit'); } G.rosterDirty = true; } break;
+        case 'impact': $('recall').classList.remove('alarm'); if (e.kind === 'swat' || e.kind === 'scratch') { audio.play('hit'); if (e.kind === 'swat' && !R.fx.reduced) G.hitStop = C.FEEL.hit_stop_ms / 1000; flash('p-clock', 'pulse'); if (e.dead.length) flash('p-staff', 'deny'); } break;
         case 'recall': audio.play('whistle'); break;
-        case 'hatch': audio.play('hatch', 0.5); flash('p-staff', 'pulse'); G.rosterDirty = true; break;
-        case 'quotaMet': audio.play('quota'); audio.play('stamp'); showStamp(e.quarter); break;
-        case 'quotaMissed': audio.play('deny'); flash('p-quota', 'deny'); break;
-        case 'policy': audio.play('hatch'); G.rosterDirty = true; break;
-        case 'wake': audio.play('alarm'); audio.music(false); document.body.classList.add('morning'); $('quota-stamp').hidden = true; if (G.modal) closeModal(true); break;
+        case 'hatch': audio.play('hatch', 0.5); flash('p-staff', 'pulse');
+          if (e.first) { audio.play('quota'); audio.play('stamp'); G.hireAt = performance.now() / 1000; if (!R.fx.reduced) { G.slow = 1.4; G.punch = { f: [e.at[0], e.at[1], 1.4], until: performance.now() / 1000 + 2.4 }; } }
+          break;
+        case 'wake': audio.play('alarm'); audio.music(false); document.body.classList.add('morning'); G.placing = null; if (G.modal) closeModal(true); break;
         case 'over': finish(); break;
       }
     }
     S.events.length = 0;
   }
-  function showStamp(q) {
-    const st = $('quota-stamp'); $('stamp-sub').textContent = `Q${q} · corporate is pleased`; st.hidden = false; st.setAttribute('data-show', ''); st.style.animation = 'none'; void st.offsetWidth; st.style.animation = '';
-    setTimeout(() => { if (G.S && G.S.offer) showPolicies(); }, R.fx.reduced ? 300 : 900);
-  }
-  function showPolicies() {
-    const S = G.S, box = $('policy-cards'); box.innerHTML = '';
-    for (const id of S.offer) { const p = C.POLICIES.find((x) => x.id === id), b = document.createElement('button'); b.type = 'button'; b.className = 'policy'; b.id = `policy-${id}`; const n = document.createElement('b'); n.textContent = p.name; const t = document.createElement('span'); t.textContent = p.text; b.append(n, t); b.addEventListener('click', () => { sim.pickPolicy(S, id); $('quota-stamp').hidden = true; $('quota-stamp').removeAttribute('data-show'); closeModal(true); drainEvents(); }); box.append(b); }
-    openModal('policy');
-  }
+
+  // ---------- the morning ----------
   function finish() {
-    const r = sim.review(G.S); save.shifts++; const rank0 = rankOf(save.career); save.career += r.score; const rank1 = rankOf(save.career);
-    const slim = { shiftNo: r.shiftNo, sleeper: r.sleeper, rating: r.rating, score: r.score, extracted: r.extracted, pct: r.pct, casualties: r.casualties };
-    const newBest = !save.best || r.score > save.best.score || (r.score === save.best.score && r.extracted > save.best.extracted); const prev = save.best; if (newBest) save.best = slim;
-    save.reviews.unshift(slim); save.reviews = save.reviews.slice(0, 8); store();
-    $('review-eyebrow').textContent = `Shift ${r.shiftNo} · ${r.sleeper}`; $('review-h').textContent = r.rating; $('review-remark').textContent = r.remark;
-    $('r-extracted').textContent = `${fmt(r.extracted)} mL`; $('r-pct').textContent = `${r.pct}%`; $('r-eff').textContent = `${r.efficiency}%`; $('r-lost').textContent = String(r.casualties); $('r-quotas').textContent = `${r.quotasMet} of 4`; $('r-score').textContent = `${r.score}/100`;
-    $('r-best').textContent = newBest ? (prev ? `New best on file. Previous best: ${prev.rating}, ${fmt(prev.extracted)} mL.` : 'First review on file. Corporate has opened a folder with your name on it.') : `Best on file: ${save.best.rating}, ${fmt(save.best.extracted)} mL.`;
-    const unlocked = C.POLICIES.filter((p) => (p.rank || 0) > rank0 && (p.rank || 0) <= rank1).map((p) => p.name);
-    $('r-career').textContent = rank1 > rank0 ? `Promoted to ${C.RANKS[rank1][1]}. New in corporate's drawer: ${unlocked.join(', ')}.` : rank1 < C.RANKS.length - 1 ? `${C.RANKS[rank1][1]} · ${C.RANKS[rank1 + 1][0] - save.career} review points to ${C.RANKS[rank1 + 1][1]}.` : `${C.RANKS[rank1][1]}. There is nowhere left to be promoted to.`; $('r-career').classList.toggle('promo', rank1 > rank0); store();
-    const list = $('r-lost-list'); list.innerHTML = ''; for (const w of r.lost) { const li = document.createElement('li'); li.textContent = `${w.name} `; const s = document.createElement('span'); s.textContent = `· ${w.trait} · supported ${w.larvae} larvae`; li.append(s); list.append(li); }
-    $('r-memoriam').hidden = r.lost.length === 0; $('hud').hidden = true;
+    const S = G.S, r = sim.report(S), before = save.campaign;
+    save.campaign = K.fold(before, S, r); store();
+    $('review-eyebrow').textContent = `Night ${r.night} · 6:30 AM`; $('review-h').textContent = C.MORNING.headline(r); $('review-note').textContent = C.MORNING.note(r);
+    $('r-extracted').textContent = `${fmt(r.extracted)} mL`; $('r-manual').textContent = `${fmt(r.manual)} mL`; $('r-auto').textContent = `${fmt(r.auto)} mL`;
+    $('r-banked').textContent = `${fmt(r.banked)} mL`; $('r-staff').textContent = String(r.staff); $('r-lost').textContent = String(r.lost.length);
+    const names = S.workers.map((w) => w.name), shown = names.slice(0, 6);
+    $('r-staff-list').textContent = names.length > 6 ? `${shown.join(', ')} and ${names.length - 6} more.` : names.length > 1 ? `${shown.slice(0, -1).join(', ')} and ${shown[shown.length - 1]}.` : `${shown[0] || ''}.`;
+    $('r-payroll').hidden = S.workers.length === 0;
+    const list = $('r-lost-list'); list.innerHTML = ''; for (const w of r.lost) { const l = document.createElement('li'); l.textContent = `${w.name} `; const s = document.createElement('span'); s.textContent = `· ${w.trait} · supported ${w.larvae} larvae`; l.append(s); list.append(l); }
+    $('r-memoriam').hidden = r.lost.length === 0;
+    const plan = $('r-plan'); plan.innerHTML = ''; K.plan(save.campaign).forEach((t) => { const l = document.createElement('li'); l.textContent = t; plan.append(l); });
+    $('again').textContent = `NIGHT ${save.campaign.night}`; $('hud').hidden = true;
     openModal('review'); $('review').setAttribute('data-ready', '');
   }
 
   // ---------- per-frame HUD ----------
   function clock(sec) { sec = Math.max(0, Math.ceil(sec)); return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; }
+  const set = (id, v) => { if (G.shown[id] !== v) { G.shown[id] = v; $(id).textContent = v; } };
+  const show = (id, on) => { const k = 'vis-' + id; if (G.shown[k] !== on) { G.shown[k] = on; $(id).hidden = !on; if (on) flash(id, 'arrive'); } };
+  function coachText(S, now) {
+    const f = S.founder, tut = S.tut, scatter = S.hev && !S.hev.hit && (S.hev.kind === 'swat' || S.hev.kind === 'scratch') && S.unlocked.includes('scatter');
+    if (scatter && (S.hev.tutorial || S.night <= 2)) return ['Press SCATTER!', 'alarm'];
+    if (G.placing) return null;
+    if (f.st === 'drink' && f.belly >= C.ECON.bellyMl - 0.05) return ['Full. Let go to fly it home.', 'warn'];
+    if (!tut) return null;
+    const idle = f.st === 'home' && now - G.idleAt > 3.5;
+    if (tut.step === 'bite') return f.st === 'drink' ? ['Keep holding. Watch her fill up.'] : ['Press and hold anywhere to bite'];
+    if (tut.step === 'fill') return idle ? ['Hold to bite. Let go to bring it home.'] : null;
+    if (tut.step === 'tank') return ['Storage is full. Tap Storage tank below.'];
+    if (tut.step === 'pool') { const c = sim.costOf(S, 'pool'); return c <= S.bank ? ['Tap Breeding pool below. You need staff.'] : idle ? [`Bite until you have ${c} mL for a breeding pool.`] : null; }
+    if (tut.step === 'eggs') return ['Eggs are hatching…'];
+    if (tut.step === 'crew' && now - G.hireAt < 7) return ['Your first employee works on their own. Watch.'];
+    return null;
+  }
   function updateHud(dt, now) {
-    const S = G.S, d = sim.derived(S);
+    const S = G.S, d = sim.derived(S), f = S.founder;
+    if (f.st !== 'home' || S.hold) G.idleAt = now;
     G.bankShown = G.bankShown === undefined || Math.abs(S.bank - G.bankShown) < 0.6 ? S.bank : G.bankShown + (S.bank - G.bankShown) * Math.min(1, dt / (C.FEEL.counter_ease_ms / 1000) * 2.2);
-    set('v-bank', fmt(Math.floor(G.bankShown))); set('v-staff', String(S.workers.length)); set('v-housing', `/${d.housing}`); set('v-lost', String(S.lost.length));
-    set('v-clock', clock(S.shiftLen - S.sleepLost - S.time)); $('p-clock').classList.toggle('cut', S.shiftLen - S.sleepLost - S.time < 30);
-    const q = Math.min(S.quarter, 3), allDone = S.quarter >= 4, prev = q > 0 ? S.quotas[q - 1] : 0;
-    set('l-quota', allDone ? `Extracted ${fmt(S.extracted)}` : `Q${q + 1} · ${fmt(Math.min(S.extracted, S.quotas[q]))}/${fmt(S.quotas[q])}`);
-    const qp = allDone ? 100 : Math.max(0, Math.min(100, ((S.extracted - prev) / (S.quotas[q] - prev)) * 100)); if (G.shown.qp !== (qp | 0)) { G.shown.qp = qp | 0; $('b-quota').style.width = qp + '%'; }
-    const ip = S.irritation | 0; if (G.shown.ip !== ip) { G.shown.ip = ip; $('b-irr').style.width = ip + '%'; }
+    set('v-bank', fmt(Math.floor(G.bankShown))); set('v-cap', `/${fmt(d.cap)}`);
+    const rate = Math.round(S.rate / 5) * 5; show('v-rate', rate > 0); if (rate > 0) set('v-rate', `+${rate} mL/min`);
+    $('p-bank').classList.toggle('full', S.bank >= d.cap - 0.5);
+    set('v-clock', clock(S.shiftLen - S.sleepLost - S.time)); $('p-clock').classList.toggle('cut', S.shiftLen - S.sleepLost - S.time < 20);
+    show('p-staff', S.hires > 0 || S.workers.length > 0); set('v-staff', String(S.workers.length)); set('v-housing', `/${d.housing}`);
+    show('p-irr', S.unlocked.includes('scatter')); const ip = S.irritation | 0; if (G.shown.ip !== ip) { G.shown.ip = ip; $('b-irr').style.width = ip + '%'; }
     const rc = $('recall'), cd = S.recallCd > 0; rc.classList.toggle('cooling', cd); rc.style.setProperty('--cd', cd ? `${(S.recallCd / (C.FEEL.recall_cooldown_s * S.mods.recallCd)) * 100}%` : '0%');
     if (!(S.hev && !S.hev.hit && (S.hev.kind === 'swat' || S.hev.kind === 'scratch'))) rc.classList.remove('alarm');
-    for (let i = 0; i < 3; i++) { const v = String(S.pace === i); if (G.shown['pace' + i] !== v) { G.shown['pace' + i] = v; $(`pace-${i}`).setAttribute('aria-pressed', v); } }
-    if (now - G.uiAt > 0.2) {
-      G.uiAt = now;
-      if (G.tab === 'build' && !G.selected) updateCards();
-      if (G.tab === 'build' && G.selected) { const b = S.buildings.find((x) => x.id === G.selected), up = $('upgrade'); if (b && up) up.classList.toggle('can', sim.upgradeCost(b) <= S.bank); }
-      if (G.tab === 'staff') {
-        const nR = S.workers.filter((w) => w.job === 'refine').length, nH = S.workers.filter((w) => w.job === 'hatch').length, nE = S.workers.length - nR - nH;
-        set('s-refine', String(nR)); set('s-hatch', String(nH));
-        set('s-refine-cap', `${Math.min(nR, d.stations)} of ${d.stations} stations${nR > d.stations ? ' · overstaffed' : ''}`); $('s-refine-cap').classList.toggle('over', nR > d.stations);
-        set('s-hatch-cap', d.nurseStations ? `${Math.min(nH, d.nurseStations)} of ${d.nurseStations} stations · hire ${fmt(S.hireCost || 0)} mL` : 'No hatchery yet'); $('s-hatch-cap').classList.toggle('over', nH > d.nurseStations);
-        set('s-extract', `${nE} staff · ${d.slots} bite stations`); set('s-morale', `${Math.round(S.morale)}%`);
-        const h = S.hiring ? (S.workers.length >= d.housing ? 'Hiring: on · housing full' : 'Hiring: on') : 'Hiring: frozen'; set('hiring', h); if (G.shown.hp !== S.hiring) { G.shown.hp = S.hiring; $('hiring').setAttribute('aria-pressed', String(S.hiring)); }
-      }
-      if (G.tab === 'roster' && G.rosterDirty) {
-        G.rosterDirty = false; const ul = $('roster'); ul.innerHTML = '';
-        const row = (name, right, gone) => { const li = document.createElement('li'); if (gone) li.className = 'gone'; li.textContent = name; const s = document.createElement('span'); s.textContent = right; li.append(s); ul.append(li); };
-        S.workers.forEach((w) => row(`${w.name} · ${w.trait}`, `${C.JOB_NAMES[w.job]} · ${w.loads} loads`));
-        S.lost.slice().reverse().forEach((w) => row(w.name, `lost to a ${w.cause} · ${w.larvae} larvae`, true));
-      }
-    }
-    // memo toasts
+    const ct = coachText(S, now), coach = $('coach'), txt = ct ? ct[0] : '';
+    if (G.shown.coach !== txt) { G.shown.coach = txt; coach.hidden = !ct; if (ct) { coach.textContent = txt; coach.className = `coach ${ct[1] || ''}`; flash('coach', 'arrive'); } }
+    const key = C.BUILD_ORDER.filter((t) => S.unlocked.includes(t)).join(',') + '|' + (G.placing || '') + '|' + (G.selected || '');
+    if (key !== G.cardsKey) renderPanel();
+    if (now - G.uiAt > 0.2) { G.uiAt = now; if (!G.placing && !G.selected) updateCards(); const up = $('upgrade'); if (up && G.selected) { const b = S.buildings.find((x) => x.id === G.selected); if (b) up.classList.toggle('can', sim.upgradeCost(b) <= S.bank); } }
+    if (f.st === 'drink' && f.belly < C.ECON.bellyMl - 0.05) audio.play('slurp', 0.3);
+    // memos: Rhonda's sticky notes
     const m = $('memo');
-    if (now >= G.memoUntil) { const e = G.memoQ.shift(); if (e) { $('memo-text').textContent = e.text; m.className = 'memo'; void m.offsetWidth; m.className = `memo fresh ${e.tone}`; G.memoUntil = now + (e.tone === 'idle' ? 4.5 : 5.5); } else m.classList.add('old'); }
+    if (now >= G.memoUntil) { const e = G.memoQ.shift(); if (e) { m.hidden = false; $('memo-text').textContent = e.text; m.className = 'memo'; void m.offsetWidth; m.className = `memo fresh ${e.tone}`; G.memoUntil = now + (e.tone === 'idle' ? 4.5 : 5.5); } else if (!m.hidden) m.classList.add('old'); }
+  }
+
+  // ---------- camera: tight on the founder at first, opening up as the colony grows ----------
+  function playCam(S) {
+    if (G.placing || !S) return { f: [6.8, 6.2, 0.6], z: 1, k: 0 };
+    const n = S.buildings.length - 1 + Math.min(S.workers.length, 6) * 0.25;
+    // a phone needs the close-up to read one mosquito; a wide screen already shows her at a readable size
+    const narrow = Math.max(0, Math.min(1, (760 - stageRect().width) / 340));
+    const z = 1 + ((n < 0.5 ? 1.7 : n < 1.5 ? 1.42 : n < 3 ? 1.2 : 1) - 1) * narrow;
+    return { f: [6.4, 5.3, 1.6], z, k: z > 1.01 ? 0.85 : 0 };
+  }
+  function stageRect() {
+    if (G.mode === 'title') return $('title-stage').getBoundingClientRect();
+    if (G.mode === 'opening') return { left: 0, top: innerHeight * 0.08, width: innerWidth, height: innerHeight * 0.72 };
+    return $('stage').getBoundingClientRect();
+  }
+  let lastView = null;
+  function view() { return lastView || R.place(stageRect()); }
+  function stepView(dt, now) {
+    const r = stageRect(), b = R.place(r), a = 1 - Math.exp(-dt * 5);
+    if (!G.base || dt === 0) G.base = b; else G.base = { s: G.base.s + (b.s - G.base.s) * a, cx: G.base.cx + (b.cx - G.base.cx) * a, cy: G.base.cy + (b.cy - G.base.cy) * a };
+    let t = G.mode === 'opening' ? cineCam(G.cineT) : G.mode === 'play' ? playCam(G.S) : { f: [7, 6.5, 0], z: 1, k: 0 };
+    if (G.punch && now < G.punch.until && G.mode === 'play') t = { f: G.punch.f, z: t.z + 0.3, k: 0.75 }; else G.punch = null;
+    if (!G.cam) G.cam = { f: t.f.slice(), z: t.z, k: t.k };
+    const c = G.cam, e = 1 - Math.exp(-dt * (G.mode === 'opening' ? 1.6 : 2.4));
+    for (let i = 0; i < 3; i++) c.f[i] += (t.f[i] - c.f[i]) * e; c.z += (t.z - c.z) * e; c.k += (t.k - c.k) * e;
+    lastView = R.camera(G.base, r, c.f, c.z, c.k);
+    return lastView;
   }
 
   // ---------- frame loop ----------
-  function view() { const el = $(G.mode === 'title' ? 'title-stage' : 'stage'); return R.place(el.getBoundingClientRect()); }
   function stars(t) { ctx.fillStyle = 'rgba(223,229,255,.5)'; for (let i = 0; i < 40; i++) { const x = (i * 197.3) % innerWidth, y = (i * 89.7) % (innerHeight * 0.6); ctx.globalAlpha = R.fx.reduced ? 0.4 : 0.25 + 0.25 * Math.sin(t + i); ctx.fillRect(x, y, 1.5, 1.5); } ctx.globalAlpha = 1; }
   const STEP = 1 / 30;
   function frame(ms) {
     const now = ms / 1000, dt = Math.min(0.1, now - (G.last || now)); G.last = now;
     ctx.clearRect(0, 0, innerWidth, innerHeight); stars(now);
     if (G.mode === 'title') {
-      const S = G.demo; G.acc += dt; while (G.acc >= STEP) { G.acc -= STEP; sim.step(S, STEP); S.time = 80; S.irritation = 0; S.bank = Math.min(S.bank, 5); S.events.length = 0; }
-      R.draw(ctx, view(), S, now, { demo: true });
+      const S = G.demo; G.acc += dt; while (G.acc >= STEP) { G.acc -= STEP; sim.step(S, STEP); S.time = Math.min(S.time, 20); S.irritation = 0; S.events.length = 0; }
+      R.draw(ctx, stepView(dt, now), S, now, { demo: true });
+    } else if (G.mode === 'opening') {
+      G.cineT += dt; caption(G.cineT); if (G.cineT >= C.FEEL.opening_seconds) endOpening();
+      if (G.mode === 'opening') R.draw(ctx, stepView(dt, now), G.S, now, { cine: { t: G.cineT } });
     } else if (G.S) {
       const S = G.S;
       if (!G.paused && !(G.modal && G.modal !== 'review')) {
-        if (G.hitStop > 0) G.hitStop -= dt; else { G.acc += dt; let n = 0; while (G.acc >= STEP && n++ < 5) { G.acc -= STEP; sim.step(S, STEP); if (S.events.length) drainEvents(); if (G.hitStop > 0) break; } if (n >= 5) G.acc = 0; }
+        if (G.hitStop > 0) G.hitStop -= dt;
+        else { const k = G.slow > 0 ? 0.35 : 1; G.slow = Math.max(0, G.slow - dt); G.acc += dt * k; let n = 0; while (G.acc >= STEP && n++ < 5) { G.acc -= STEP; sim.step(S, STEP); if (S.events.length) drainEvents(); if (G.hitStop > 0) break; } if (n >= 5) G.acc = 0; }
       }
-      if (G.S) { R.draw(ctx, view(), S, now, { selected: G.selected }); if (S.state === 'playing' && !$('hud').hidden) updateHud(dt, now); }
+      if (G.S) { const hint = S.tut && (S.tut.step === 'bite' || (S.tut.step === 'fill' && now - G.idleAt > 3.5)) && S.founder.st === 'home' ? 'hold' : null; R.draw(ctx, stepView(dt, now), S, now, { selected: G.selected, placing: G.placing, hint }); if (S.state === 'playing' && !$('hud').hidden) updateHud(dt, now); }
     }
     requestAnimationFrame(frame);
   }
 
-  // ---------- measurement hooks (PLAYCRAFT, the shot list) ----------
+  // ---------- measurement hooks (PLAYCRAFT, the shot list, the feature checks) ----------
   const fxName = (S) => (S && S.hev && S.hev.kind === 'swat' ? (S.hev.hit ? 'swat-impact' : 'swat-warning') : S && S.hev ? S.hev.kind : null);
   window.__game = {
-    get state() { return G.mode === 'title' ? 'title' : G.S.state; }, get paused() { return G.paused; }, get score() { return G.S ? Math.round(G.S.extracted) : 0; }, get time() { return G.S ? G.S.time : 0; },
-    get bank() { return G.S ? Math.floor(G.S.bank) : 0; }, get workers() { return G.S ? G.S.workers.length : 0; }, get buildings() { return G.S ? G.S.buildings.length : 0; }, get casualties() { return G.S ? G.S.lost.length : 0; },
-    get irritation() { return G.S ? G.S.irritation : 0; }, get rank() { return rankOf(save.career); }, get career() { return save.career; }, get quotasMet() { return G.S ? G.S.quotasMet : 0; }, get sleepLeft() { return G.S ? G.S.shiftLen - G.S.sleepLost - G.S.time : 0; }, get fx() { return fxName(G.S); }, get best() { return save.best ? save.best.score : 0; },
+    get state() { return G.mode === 'title' ? 'title' : G.mode === 'opening' ? 'opening' : G.S.state; }, get paused() { return G.paused; }, get score() { return G.S ? Math.round(G.S.extracted) : 0; }, get time() { return G.S ? G.S.time : 0; },
+    get bank() { return G.S ? Math.floor(G.S.bank) : 0; }, get workers() { return G.S ? G.S.workers.length : 0; }, get buildings() { return G.S ? G.S.buildings.length - 1 : 0; }, get casualties() { return G.S ? G.S.lost.length : 0; },
+    get irritation() { return G.S ? G.S.irritation : 0; }, get night() { return G.S ? G.S.night : save.campaign.night; }, get founder() { return G.S ? G.S.founder.st : null; }, get belly() { return G.S ? G.S.founder.belly : 0; },
+    get step() { return G.S && G.S.tut ? G.S.tut.step : null; }, get placing() { return G.placing; }, get unlocked() { return G.S ? G.S.unlocked.slice() : []; }, get sleepLeft() { return G.S ? G.S.shiftLen - G.S.sleepLost - G.S.time : 0; }, get fx() { return fxName(G.S); }, get cine() { return G.mode === 'opening' ? G.cineT : null; },
     debug: {
-      preset(name) { if (G.S && name === 'mid') { preset(G.S, false); G.rosterDirty = true; G.memoQ = [{ text: C.MEMOS.idle[2], tone: 'idle' }]; G.memoUntil = 0; G.uiAt = 0; updateHud(0, performance.now() / 1000); } },
-      trigger(what) { const S = G.S; if (!S || S.state !== 'playing') return; if (what === 'swat') { S.hev = null; S.eventCd = 1e9; for (let i = 0; i < 300 && !(i > 30 && S.biting >= 3); i++) { S.siteBlocked = 0; S.covered = 0; S.recallT = 0; S.irritation = Math.min(S.irritation, 20); sim.step(S, STEP); drainEvents(); } S.eventCd = 6; sim.startEvent(S, 'swat'); } else if (what === 'quota') { S.extracted = Math.max(S.extracted, S.quotas[Math.min(3, S.quarter)]); } else if (what === 'wake') sim.wake(S); else if (['scratch', 'roll', 'blanket', 'stir'].includes(what)) { S.hev = null; sim.startEvent(S, what); } drainEvents(); },
+      hold(on) { if (G.S) sim.setHold(G.S, on); },
+      bank(ml) { if (G.S) { G.S.bank = Math.min(ml, sim.derived(G.S).cap); } },
+      placeBest() { if (G.S && G.placing) { const p = sim.padsByTrip(G.S)[0]; if (p) placeAt(p.pad); } },
+      preset(name) {
+        const S = G.S; if (!S || name !== 'mid') return;
+        S.bank = 1e6; for (const t of ['tank', 'pool', 'tank', 'pool', 'rig']) { if (!S.unlocked.includes(t)) S.unlocked.push(t); const p = sim.padsByTrip(S)[0]; sim.build(S, t, p && p.pad); }
+        while (S.workers.length < 6) sim.hire(S, true); S.hires = Math.max(S.hires, 6); if (!S.unlocked.includes('scatter')) S.unlocked.push('scatter'); if (S.tut) { S.tut.step = 'free'; S.tut.scratched = true; }
+        S.buildings.forEach((b) => (b.born = -9)); S.bank = 184; S.events.length = 0; S.stats.idleNoteAt = 1e9; G.memoQ = [{ text: C.NOTES.idle[0], tone: 'idle' }]; G.memoUntil = 0; G.cardsKey = '';
+      },
+      trigger(what) { const S = G.S; if (!S || S.state !== 'playing') return; if (what === 'swat') { S.hev = null; S.eventCd = 1e9; for (let i = 0; i < 300 && !(i > 30 && S.biting >= 3); i++) { S.siteBlocked = 0; S.covered = 0; S.recallT = 0; S.irritation = Math.min(S.irritation, 20); sim.step(S, STEP); drainEvents(); } S.eventCd = 6; sim.startEvent(S, 'swat'); } else if (what === 'wake') sim.wake(S); else if (['scratch', 'roll', 'blanket', 'stir'].includes(what)) { S.hev = null; sim.startEvent(S, what); } drainEvents(); },
     },
   };
 
@@ -257,7 +352,7 @@
     document.querySelectorAll('.letterhead').forEach((el) => el.append(document.importNode(svg, true)));
   }).catch(() => {});
 
-  buildCards(); applyMute(); titleStatus();
+  applyMute(); titleStatus();
   const ready = () => { $('title').setAttribute('data-ready', ''); requestAnimationFrame(frame); };
   if (document.fonts && document.fonts.ready) Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 1500))]).then(ready); else ready();
 })();

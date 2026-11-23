@@ -17,29 +17,41 @@
     extract_trip_seconds: 4.0, fly_seconds: 1.2, bite_seconds: 1.6, worker_speed_tiles_s: 3.2,
     swat_telegraph_ms: 1400, scratch_telegraph_ms: 1000, recall_cooldown_s: 10, recall_hold_s: 3,
     hit_stop_ms: 120, shake_px: 10, build_drop_ms: 260, counter_ease_ms: 300, irritation_decay_per_s: 1.2,
+    // the campaign: night 1 is short and every night after it a little longer
+    night1_seconds: 160, night_grow_seconds: 30, night_max_seconds: 300,
+    // travel: a flight costs a fixed take-off plus time per tile, so where you build is how fast you are
+    fly_base_s: 0.3, fly_per_tile_s: 0.2, founder_speed: 1.25,
+    opening_seconds: 17, tutorial_scratch_telegraph_ms: 2400,
   };
 
   const ECON = {
-    startBank: 50, startWorkers: 5, baseHousing: 8, loadMl: 6, refinePerStation: 2.0, hatchSeconds: 7,
-    hireBase: 10, hirePerHead: 0.5, irritationPerBiter: 0.5, eventThreshold: 40, eventRelief: 28, eventCooldown: 7,
+    startBank: 0, baseHousing: 0, loadMl: 6, refinePerStation: 2.0,
+    hireBase: 10, hirePerHead: 6, hatchSeconds: 7.5, firstHatchSeconds: 4.5,
+    irritationPerBiter: 0.5, eventThreshold: 40, eventRelief: 28, eventCooldown: 7,
     scratchKill: 0.25, swatKill: 0.6, scratchSleepCost: 3, swatSleepCost: 6, stirSleepCost: 15, lateLightSleepAt: 225,
     quotas: [300, 1000, 2100, 3400], maxLevel: 3,
+    // the founder bites by hand: she holds 5 mL, drinks it in about 1.4 s, and itches him if she keeps going
+    nestCap: 30, bellyMl: 5, drinkMlPerS: 3.6, greedIrritationPerS: 24, slotsBase: 3,
   };
-
   const PACE = [
     { id: 'cautious', label: 'Cautious', bite: 1.4, irritation: 0.5, morale: 0.10 },
     { id: 'standard', label: 'Standard', bite: 1.0, irritation: 1.0, morale: 0.02 },
     { id: 'aggressive', label: 'Aggressive', bite: 0.65, irritation: 2.0, morale: -0.15 },
   ];
 
+  // `unlock` is when a card first appears: never on a timer, always because the operation hit a wall
   const BUILDINGS = {
-    rig: { name: 'Extraction rig', short: 'Rig', cost: 60, growth: 1.8, blurb: 'Bite stations on the subject. More stations, more staff on skin at once.', effect: (l) => `${4 + 3 * (l - 1)} bite stations`, gain: '+3 bite spots', single: true, maxLevel: 6 },
-    tank: { name: 'Storage tank', short: 'Tank', cost: 40, growth: 1.45, blurb: 'Holds raw blood until Refining gets to it.', effect: (l) => `Holds ${Math.round(120 * (1 + 0.75 * (l - 1)))} mL`, gain: '+120 mL held' },
+    nest: { name: 'Bottle cap', short: 'HQ', cost: Infinity, growth: 1, blurb: 'Where it all began. Holds 30 mL. Rhonda calls it HQ.', effect: () => 'Holds 30 mL', gain: '', maxLevel: 1 },
+    tank: { name: 'Storage tank', short: 'Tank', cost: 25, growth: 1.7, blurb: 'Holds blood until it is spent. Crews unload at the nearest storage.', effect: (l) => `Holds ${Math.round(120 * (1 + 0.75 * (l - 1)))} mL`, gain: '+120 mL storage', place: true },
+    pool: { name: 'Breeding pool', short: 'Pool', cost: 20, growth: 2.1, blurb: 'Standing water. Hatches staff and houses them, technically.', effect: (l) => `Houses ${3 * l} staff`, gain: '+3 staff', place: true },
+    rig: { name: 'Extraction rig', short: 'Rig', cost: 80, growth: 1.8, blurb: 'Bite stations on the subject. More staff on skin at once.', effect: (l) => `${3 + 3 * l} bite spots`, gain: '+3 bite spots', single: true, maxLevel: 5 },
     refinery: { name: 'Refinery', short: 'Refinery', cost: 90, growth: 1.6, blurb: 'Turns raw blood into banked product you can spend.', effect: (l) => `${3 * l} refining stations`, gain: '+3 refiners' },
     hatchery: { name: 'Hatchery', short: 'Hatchery', cost: 70, growth: 1.7, blurb: 'Nurses raise new hires here. Each hire costs banked blood.', effect: (l) => `${2 * l} nurse stations`, gain: '+2 nurses' },
-    pool: { name: 'Breeding pool', short: 'Pool', cost: 50, growth: 1.5, blurb: 'Standing water. Staff housing, technically.', effect: (l) => `Houses ${10 * l} staff`, gain: '+10 housing' },
   };
-  const BUILD_ORDER = ['tank', 'pool', 'hatchery', 'refinery', 'rig'];
+  // the cards a player can see, in order; refinery and hatchery return with the day phase
+  const BUILD_ORDER = ['tank', 'pool', 'rig'];
+  // where Rhonda founded the company: a bottle cap under the bed, a short hop from the arm
+  const NEST = [8.1, 3.3];
 
   // pads on the bedroom floor, in the order they fill; [x, y] in diorama tiles
   const PADS = [[0.9, 8.6], [6.2, 7.6], [8.9, 7.4], [3.6, 8.9], [11.5, 7.8], [11.9, 0.5], [8.8, 9.7], [0.7, 6.4], [11.9, 5.3], [6.1, 9.9], [11.3, 9.8]];
@@ -61,12 +73,59 @@
   ];
 
   const SLEEPERS = [
-    { id: 'manager', label: 'Male, 34, middle manager', note: 'Fell asleep mid-email.', supply: 8000, irritation: 1, bite: 1, shift: 300 },
+    { id: 'manager', label: 'Male, 34, middle manager', note: 'Fell asleep mid-email. The phone is still on his chest.', supply: 8000, irritation: 1, bite: 1, shift: 300 },
     { id: 'nurse', label: 'Night nurse, 41', note: 'Third double this week. Sleeps like a filing cabinet.', supply: 7400, irritation: 0.75, bite: 1, shift: 300 },
     { id: 'student', label: 'Grad student, 26', note: 'Three energy drinks. Twitchy, but well stocked.', supply: 9000, irritation: 1.3, bite: 0.9, shift: 300 },
     { id: 'trucker', label: 'Long-haul driver, 52', note: 'Thick skin. Fourteen hours on the road.', supply: 10200, irritation: 0.85, bite: 1.2, shift: 300 },
     { id: 'parent', label: 'New parent, 31', note: 'The baby monitor is on. The window is short.', supply: 7700, irritation: 0.8, bite: 1, shift: 250 },
   ];
+
+  // the one sleeper the colony is built on; the rest of SLEEPERS are for Acquisitions, later
+  const HOST = SLEEPERS[0];
+
+  const FOUNDER = { name: 'Rhonda', title: 'Founder & CEO', bio: 'Has read every business book in the airport. Says "we" when it is just her.' };
+
+  // the opening: four captions over about 17 seconds, then the first bite
+  const OPENING = [
+    { at: 0, time: '11:41 PM', line: 'One more email. Then sleep.' },
+    { at: 4.5, time: '11:42 PM', line: 'He did not finish the email.' },
+    { at: 8.5, time: '11:43 PM', line: 'Through the window: one mosquito, looking for a better life.' },
+    { at: 13, time: 'Rhonda', line: 'Founder. CEO. Only employee.' },
+  ];
+
+  // Rhonda's sticky notes: earnest at first; the company voice creeps in as the colony grows
+  const NOTES = {
+    firstBite: 'First deposit. Night one of the empire. — R.',
+    greedy: 'Too greedy. He felt that. Let go!',
+    nestFull: 'The bottle cap is full. That is not a problem. That is a growth opportunity. — R.',
+    tankBuilt: 'Our first real asset. Now: nobody builds an empire alone. I read that in an airport. — R.',
+    eggs: 'Eggs laid in the saucer. Hatching shortly. I am proud, and already slightly exploitative. — R.',
+    firstHire: (name) => `Meet ${name}. ${name.split(' ')[0]} does what I did, all night, forever. That is called scale. — R.`,
+    scratchTut: 'The hand is moving. Everybody off the arm: SCATTER!',
+    tutSaved: 'Nobody hurt. I am calling that a culture of safety. — R.',
+    tutLucky: 'We got lucky. Next time the hand moves, press SCATTER. — R.',
+    founderHit: 'Rhonda got clipped. She is fine. She is putting it in her memoir.',
+    storageFull: 'Storage is full and the crew is queuing. Another tank, somewhere close to the bite.',
+    housingFull: 'Every pool is full. More pools, more staff.',
+    rigNeed: 'The arm is crowded. Staff are waiting their turn. A rig fits more of us on.',
+    alarmSoon: 'Twenty seconds to the alarm. Last call on the arm.',
+    nightStart: (n, staff) => n === 2 ? `Night 2. ${staff ? `${staff} on payroll. ` : ''}Same arm, bigger plans. — R.` : `Night ${n}. ${staff} on payroll. Let's circle back to the arm. — R.`,
+    idle: [
+      'I have started calling the arm "the pipeline". — R.',
+      'Working on a mission statement. Something with "synergy" in it.',
+      'Reminder: we are a family here. Families do unpaid overtime.',
+      'If anyone asks, we are pre-revenue.',
+      'I have ordered business cards. They are very small.',
+      'Whoever is whining near the ear: we have talked about this.',
+      'Please stop calling him "the client". We do not have a contract.',
+    ],
+  };
+
+  // the first morning, and every morning after: what happened, and what tonight could be
+  const MORNING = {
+    headline: (r) => r.night === 1 ? `${r.extracted} mL. Not bad for one mosquito.` : r.lost.length ? 'We lost people last night.' : `${r.extracted} mL. ${r.staff} employees. One vision.`,
+    note: (r) => r.night === 1 ? (r.staff ? 'Last night it was just me. This morning we are a company. — R.' : 'Tonight we hire. Nobody builds an empire alone. — R.') : r.lost.length ? 'We keep going. It is what they would have wanted. Probably. — R.' : 'He has no idea. Let\'s keep it that way. — R.',
+  };
 
   const FIRST = ['Denise', 'Carl', 'Marjorie', 'Dale', 'Linda', 'Earl', 'Brenda', 'Walt', 'Phyllis', 'Hank', 'Doreen', 'Stan', 'Gladys', 'Vern', 'Lorraine', 'Roy', 'Peggy', 'Norm', 'Bev', 'Gus', 'Arlene', 'Lyle', 'Trudy', 'Merle', 'Joyce', 'Floyd', 'Wanda', 'Chet', 'Dot', 'Irv', 'Marge', 'Buck', 'Opal', 'Ned', 'Fern', 'Otis', 'Ruthie', 'Clyde', 'June', 'Mort'];
   const LAST = ['Kowalski', 'Pruitt', 'Abernathy', 'Dombrowski', 'Tuttle', 'Vance', 'Hollis', 'McGraw', 'Ostrowski', 'Finch', 'Baxter', 'Lindqvist', 'Purdy', 'Zielinski', 'Hobbs', 'Tanaka', 'Okafor', 'Reyes', 'Whitlock', 'Mendoza'];
@@ -128,7 +187,7 @@
   // career: review points add up across shifts; each promotion puts one more policy in corporate's drawer
   const RANKS = [[0, 'Acting Plant Manager'], [90, 'Plant Manager'], [220, 'Senior Plant Manager'], [400, 'Regional Manager'], [650, 'VP of Extraction']];
 
-  const HANDBOOK = [
+  const HANDBOOK_CORP = [
     ['Your job', 'Extract as much of the subject\'s blood as you can before the alarm. The subject cannot be harmed. Corporate checked.'],
     ['The line', 'Extraction bites and fills the tanks. Refining turns tank blood into banked product. Banked product pays for everything.'],
     ['Staffing', 'Set how many staff refine and how many nurse in the hatchery. Everyone else extracts. Watch for queues: they show you the bottleneck.'],
@@ -138,6 +197,16 @@
     ['Your career', 'Every review adds to your file. Promotions put new policies in corporate\'s drawer for later shifts.'],
   ];
 
-  MA.config = { PALETTE, FEEL, ECON, PACE, BUILDINGS, BUILD_ORDER, PADS, SITES, POLICIES, SLEEPERS, FIRST, LAST, TRAITS, JOB_NAMES, MEMOS, RATINGS, RANKS, HANDBOOK };
+  const HANDBOOK = [
+    ['The bite', 'Press and hold anywhere in the room. Rhonda flies to the arm and drinks. Let go and she flies the blood home.'],
+    ['Do not get greedy', 'Drinking past full makes him itch. When the hand starts to move, let go.'],
+    ['Storage', 'Blood is kept in the bottle cap and your tanks. When storage is full, nobody can unload.'],
+    ['Staff', 'Breeding pools hatch employees. They bite and carry on their own, all night.'],
+    ['Placement', 'You choose where things go. Storage close to the bite means shorter trips.'],
+    ['Scatter', 'When the hand twitches, Scatter pulls everyone off the skin.'],
+    ['Mornings', 'The colony keeps. Every night starts where the last one ended.'],
+  ];
+
+  MA.config = { PALETTE, FEEL, ECON, PACE, BUILDINGS, BUILD_ORDER, NEST, PADS, SITES, POLICIES, SLEEPERS, HOST, FOUNDER, OPENING, NOTES, MORNING, FIRST, LAST, TRAITS, JOB_NAMES, MEMOS, RATINGS, RANKS, HANDBOOK, HANDBOOK_CORP };
   if (typeof module !== 'undefined') module.exports = MA;
 })(typeof window !== 'undefined' ? window : globalThis);
