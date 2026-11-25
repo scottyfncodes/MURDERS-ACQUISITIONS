@@ -84,7 +84,9 @@ function day(camp, n, policy) {
   }
   if (policy.lookout) { buy('lookout'); if (last.deadOnReport && D.buildings.some((b) => b.type === 'lookout' && b.level < 2)) buy('lookout'); }
   if (!D.buildings.some((b) => b.type === 'refinery') || last.clotted > 60) buy('refinery');
-  for (let i = 0; i < 6; i++) { const want = last.storageFullSec > 4 ? 'tank' : last.hrCapped ? 'rig' : 'pool'; if (!buy(want) && !buy('rig') && !buy('tank') && !buy('floor')) break; }
+  for (let i = 0; i < 6; i++) { const want = last.storageFullSec > 4 ? (i % 2 ? 'refinery' : 'tank') : last.hrCapped ? 'rig' : 'pool'; if (!buy(want) && !buy('rig') && !buy('tank') && !buy('floor')) break; }
+  // R&D: the lab, then one phase of research a day, in the strategy's order
+  if (policy.research) { buy('lab'); for (const t of policy.research) if (buy(t)) break; }
   const out = K.foldDay(camp, D, true); out.daySpent = D.spent; return out;
 }
 // a whole campaign: nights and days in a row, with a per-night log of everything the balance report needs

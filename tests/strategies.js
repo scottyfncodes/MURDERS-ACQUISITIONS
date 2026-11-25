@@ -9,6 +9,9 @@ const STRATEGIES = {
   'acquire, aggressive GM': { profile: 'careful', lookout: true, acquire: true, gm: 'aggressive' },
   'acquire, lie low when booked': { profile: 'careful', lookout: true, acquire: true, gm: (c) => (c.booking !== null ? 'lie' : 'standard'), train: 1, lieLow: true },
   'acquire, hands-on (no delegation)': { profile: 'careful', lookout: true, acquire: true, gm: 'standard', handsOn: true },
+  'never acquire, R&D numbing': { profile: 'careful', lookout: true, research: ['numbing'] },
+  'never acquire, R&D thinner': { profile: 'careful', lookout: true, research: ['thinner'] },
+  'acquire, trained GM, R&D both': { profile: 'careful', lookout: true, acquire: true, gm: 'standard', train: 2, research: ['numbing', 'thinner'] },
   'reckless expansion': { profile: 'reckless', lookout: true, acquire: true, gm: 'aggressive' },
 };
 function run(name, nights, seeds) {

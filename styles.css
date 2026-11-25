@@ -223,6 +223,8 @@ body.is-cine .title { display: none; }
 .review-grid dd { margin: 0; font-family: var(--display); font-size: 17px; white-space: nowrap; color: var(--primary); font-variant-numeric: tabular-nums; }
 .best { font-size: var(--t-s); color: var(--muted); }
 .career { font-size: var(--t-s); color: var(--muted); margin-top: calc(var(--s2) * -1); } .career.promo { color: var(--primary); font-weight: 700; }
+.promo h3 { font-size: var(--t-xs); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); } .promo .sub { margin: 2px 0 0; font-size: var(--t-xs); }
+.promo ul { list-style: none; padding: 0; margin-top: 4px; font-size: var(--t-s); display: grid; gap: 2px; } .promo li span { color: var(--primary); font-weight: 700; }
 .memoriam h3 { font-size: var(--t-xs); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
 .memoriam ul { list-style: none; padding: 0; margin-top: 4px; font-size: var(--t-s); max-height: 88px; overflow-y: auto; display: grid; gap: 2px; } .memoriam li span { color: var(--muted); }
 @media (min-width: 700px) { .modal { place-items: center; } .policy-cards { grid-template-columns: repeat(3, 1fr); } .policy { min-height: 150px; } .sheet:has(.policy-cards) { max-width: 760px; } }

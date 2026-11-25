@@ -32,7 +32,7 @@ There is no build step and there are no dependencies.
 - **Days** have no clock and no host: he is at work. Build and upgrade, then tap **Nightfall** (N).
 - New cards appear when the operation hits a wall: a crowded arm (**Extraction rig**), long flights to storage after he
   rolls over (**Drip line**), a full floor (**Floor space**). With no floor left, a card upgrades the cheapest building.
-- At 100% **suspicion** he books an **exterminator** three nights out. If suspicion is under 70% that morning he
+- At 100% **suspicion** he books an **exterminator** three nights out. If suspicion is under 80% that morning he
   cancels; otherwise the bedroom is fumigated (a "workforce restructuring": 40% of non-executive staff, newest first,
   all raw blood, one level off every pool; suspicion drops to 40%, three nights' grace, half-price rehiring for two).
   The morning report itemises suspicion: bites per division, each disturbance, bodies found, and what he forgot.
@@ -45,6 +45,16 @@ There is no build step and there are no dependencies.
   and refining. Scatter covers both floors.
 - **The lease**: 14 nights per host, then the annual report and relocation to a fresh host. Staff, buildings,
   divisions and blood move; his suspicion, purchases and any booking do not.
+- **Careers**: every night an employee survives counts. Intern, Associate (2 nights), Senior Associate (5), Partner (9):
+  each rank bites faster and carries more, with a band on the hard hat (partners wear bowlers). Promotions are announced
+  in the morning; the memorial remembers rank.
+- **Saliva R&D** (from day 4): a lab on the headboard, then two lines of research, three phases each. **Numbing agent**:
+  less itch. **Blood thinner**: faster, fuller bites, but bigger welts (each bite is noticed more).
+- **Premium levels**: storage tanks and refineries go to level 6 (gold hoops, gold stacks) at steeply rising prices.
+- **He deflates**: the more of him the company has taken (tonight, and over the lease), the paler and flatter he gets.
+  He has a comfortable nightly limit (8,000 mL, half as much again with the foot); past it each bite brings up less,
+  down to a trickle. The new host after a relocation arrives full.
+- **Camera**: close on the floor you are on. Pinch, scroll or +/- to zoom; all the way out shows the whole room.
 - The colony, its staff and its stored blood carry over from night to night.
 - B holds the bite on a keyboard; P pauses, M mutes.
 
@@ -62,6 +72,7 @@ There is no build step and there are no dependencies.
 | `tests/balance.js` | Balance report, careful vs reckless with and without a lookout: `node tests/balance.js [nights] [seeds]` |
 | `tests/bot.js` | The test players (a human-paced night bot and a campaign runner) |
 | `tests/acquisitions.test.js` | The foot, GMs and policies, the plant, the roll, suspicion, the exterminator, the lease: `node tests/acquisitions.test.js` |
+| `tests/depth.test.js` | Careers, Saliva R&D, the host running dry and deflating: `node tests/depth.test.js` |
 | `tests/strategies.js` | Strategy simulations over a lease (never acquire, untrained/trained/aggressive GMs, lying low, hands-on, reckless): `node tests/strategies.js [nights] [seeds]` |
 | `tests/regression.js` | Golden regression against `tests/golden/baseline.json` (`--write` re-records it after an intentional balance change); `tests/golden/pr6-saves.json` holds saves written before divisions existed, checked by `sim.test.js` |
 | `art-direction/` | The approved look and the shot list |

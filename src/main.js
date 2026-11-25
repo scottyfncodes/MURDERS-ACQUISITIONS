@@ -20,7 +20,7 @@
   // ---------- state ----------
   const cv = $('game'), ctx = cv.getContext('2d');
   const fresh = new Set(); // cards unlocked but not yet tapped: they pulse once, not every night
-  const G = { mode: 'title', S: null, demo: null, paused: false, selected: null, placing: null, hitStop: 0, slow: 0, acc: 0, last: 0, shown: {}, memoQ: [], memoUntil: 0, modal: null, uiAt: 0, cineT: 0, base: null, cam: null, punch: null, press: null, cardsKey: '', idleAt: 0, hireAt: -99 };
+  const G = { zoom: 1, pinch: null, mode: 'title', S: null, demo: null, paused: false, selected: null, placing: null, hitStop: 0, slow: 0, acc: 0, last: 0, shown: {}, memoQ: [], memoUntil: 0, modal: null, uiAt: 0, cineT: 0, base: null, cam: null, punch: null, press: null, cardsKey: '', idleAt: 0, hireAt: -99 };
   R.fx.reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function fit() { const d = Math.min(2, window.devicePixelRatio || 1); cv.width = Math.round(innerWidth * d); cv.height = Math.round(innerHeight * d); ctx.setTransform(d, 0, 0, d, 0, 0); }
@@ -152,8 +152,8 @@
     for (const type in cards) {
       const def = C.BUILDINGS[type], cost = sim.costOf(S, type, S.focus), el = cards[type], mine = def.single && S.buildings.find((b) => b.type === type && (!C.DIVISION_BUILDINGS.includes(type) || (b.div || 'arm') === S.focus));
       const own = def.single ? (mine ? `Lv ${mine.level}` : 'new') : d.counts[type] ? `×${d.counts[type]}` : 'new';
-      const up = !def.single && !sim.freePads(S).length && cost !== Infinity, price = cost === Infinity ? (def.single ? `Max · ${own}` : `Maxed · ${own}`) : up ? `Upgrade · ${fmt(cost)} mL` : `${fmt(cost)} mL · ${own}`;
-      const owned = !!mine, sub = up ? 'Upgrades the cheapest one' : owned && def.upgradeGain ? def.upgradeGain : def.gain; if (el._sub !== sub) { el._sub = sub; el.children[1].textContent = sub; }
+      const up = !def.single && !sim.freePads(S).length && cost !== Infinity, cheap = up ? sim.cheapestUpgrade(S, type) : null, price = cost === Infinity ? (def.single ? `Max · ${own}` : `Maxed · ${own}`) : up ? `${fmt(cost)} mL · ${own}` : `${fmt(cost)} mL · ${own}`;
+      const owned = !!mine, sub = up ? (cheap ? `Upgrade one to Lv ${cheap.level + 1}` : 'Upgrade one') : owned && cost === Infinity && def.requires ? def.effect(mine.level) : owned && def.upgradeGain ? (typeof def.upgradeGain === 'function' ? def.upgradeGain(mine.level) : def.upgradeGain) : def.gain; if (el._sub !== sub) { el._sub = sub; el.children[1].textContent = sub; }
       if (el._price !== price) { el._price = price; el.children[2].textContent = price; }
       el.classList.toggle('can', cost <= S.bank);
     }
@@ -162,8 +162,16 @@
   // ---------- input: press and hold anywhere to bite; a quick tap on a building inspects it ----------
   function inPlay() { return G.mode === 'play' && G.S && G.S.state === 'playing' && !G.modal && !G.paused; }
   cv.addEventListener('contextmenu', (e) => e.preventDefault());
+  // two fingers pinch the camera; the second finger cancels the bite the first one started
+  const touches = new Map();
+  const spread = () => { const p = [...touches.values()]; return Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y); };
+  cv.addEventListener('pointerdown', (e) => { touches.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (touches.size === 2 && G.mode === 'play') { if (G.press) { G.press = null; if (G.S) sim.setHold(G.S, false); } G.pinch = { d: spread(), z: G.zoom }; } }, true);
+  cv.addEventListener('pointermove', (e) => { if (!touches.has(e.pointerId)) return; touches.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (G.pinch && touches.size >= 2) { G.zoom = Math.max(0.6, Math.min(2.2, G.pinch.z * spread() / Math.max(10, G.pinch.d))); } });
+  const lift = (e) => { touches.delete(e.pointerId); if (touches.size < 2) G.pinch = null; };
+  ['pointerup', 'pointercancel'].forEach((k) => cv.addEventListener(k, lift, true));
+  cv.addEventListener('wheel', (e) => { if (G.mode !== 'play') return; e.preventDefault(); zoomBy(Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
   cv.addEventListener('pointerdown', (e) => {
-    audio.start();
+    audio.start(); if (G.pinch) return;
     if (G.mode === 'opening') { endOpening(); return; }
     if (!inPlay()) return;
     if (G.placing) { const pad = R.pickPad(view(), G.S, e.clientX, e.clientY); if (pad >= 0) placeAt(pad); else audio.play('deny'); return; }
@@ -219,6 +227,7 @@
     else if (k === 'tab' && G.S && multi(G.S)) { e.preventDefault(); switchFloor(); }
     else if (k === ' ') { e.preventDefault(); if (G.S && G.S.unlocked.includes('scatter')) $('recall').click(); }
     else if (k === 'n' && G.S && G.S.phase === 'day') nightfall();
+    else if ((k === '=' || k === '+') && G.mode === 'play') zoomBy(1.15); else if ((k === '-' || k === '_') && G.mode === 'play') zoomBy(1 / 1.15);
     else if (k >= '1' && k <= '6' && G.S) { const t = visibleCards(G.S)[Number(k) - 1]; if (t) pickCard(t); }
   });
   addEventListener('keyup', (e) => { if (e.key.toLowerCase() === 'b' && G.S) sim.setHold(G.S, false); });
@@ -270,7 +279,10 @@
     const names = crew.map((w) => w.name), shown = names.slice(0, 6);
     $('r-staff-list').textContent = names.length > 6 ? `${shown.join(', ')} and ${names.length - 6} more.` : names.length > 1 ? `${shown.slice(0, -1).join(', ')} and ${shown[shown.length - 1]}.` : `${shown[0] || ''}.`;
     $('r-payroll').hidden = crew.length === 0;
-    const list = $('r-lost-list'); list.innerHTML = ''; for (const w of r.lost) { const l = document.createElement('li'); l.textContent = `${w.name} `; const s = document.createElement('span'); s.textContent = `· ${w.trait} · supported ${w.larvae} larvae`; l.append(s); list.append(l); }
+    const promo = (news.promotions || []).filter((p) => crew.some((w) => w.name === p.name)), pl = $('r-promo-list'); $('r-promo').hidden = !promo.length; pl.innerHTML = '';
+    for (const p of promo.slice(0, 4)) { const l = document.createElement('li'); l.textContent = `${p.name} `; const sp = document.createElement('span'); sp.textContent = `→ ${p.rank}`; l.append(sp); pl.append(l); }
+    if (promo.length > 4) { const l = document.createElement('li'); l.textContent = `and ${promo.length - 4} more.`; pl.append(l); }
+    const list = $('r-lost-list'); list.innerHTML = ''; for (const w of r.lost) { const l = document.createElement('li'); l.textContent = `${w.name} `; const s = document.createElement('span'); s.textContent = `· ${w.rank ? `${C.CAREER[w.rank].name} · ` : ''}${w.trait} · supported ${w.larvae} larvae`; l.append(s); list.append(l); }
     $('r-memoriam').hidden = r.lost.length === 0;
     const clot = C.MORNING.clot(r); $('r-clot').hidden = !clot; $('r-clot').textContent = clot;
     // each division's night, then the suspicion breakdown: where it came from, what he forgets, what happens next
@@ -348,7 +360,7 @@
     // one plate, two jobs: his sleep and itch at night; his suspicion (and when he next buys something) in the day
     const day = S.phase === 'day', sus = save.campaign.suspicion, nxt = K.nextCounter(save.campaign);
     show('p-irr', day ? S.night > 2 || sus > 0 : S.unlocked.includes('scatter'));
-    const bk = save.campaign.booking, lab = day ? (bk !== null ? `Exterminator ${Math.max(0, bk - S.night + 1)}n` : 'Suspicion') : S.rhythm ? (S.depth < 0.35 ? 'Light' : S.depth > 0.6 ? 'Deep' : 'Sleep') : 'Itch'; set('l-irr', lab);
+    const bk = save.campaign.booking, lab = day ? (bk !== null ? `Booked ${Math.max(0, bk - S.night + 1)}n` : 'Suspicion') : S.rhythm ? (S.depth < 0.35 ? 'Light' : S.depth > 0.6 ? 'Deep' : 'Sleep') : 'Itch'; set('l-irr', lab);
     $('p-irr').classList.toggle('light', !day && S.rhythm && S.depth < 0.35); $('p-irr').classList.toggle('deep', !day && S.rhythm && S.depth > 0.6);
     const ip = Math.round(day ? sus : S.irritation); if (G.shown.ip !== ip + (day ? 'd' : 'n')) { G.shown.ip = ip + (day ? 'd' : 'n'); $('b-irr').style.width = ip + '%'; $('p-irr').querySelector('u').style.left = `${day ? (nxt ? nxt.at : 100) : C.ECON.eventThreshold}%`; }
     show('pace', !day && S.unlocked.includes('push')); const pv = String(S.pace === 2); if (G.shown.pv !== pv) { G.shown.pv = pv; $('push').setAttribute('aria-pressed', pv); $('ease').setAttribute('aria-pressed', String(S.pace !== 2)); }
@@ -370,15 +382,19 @@
 
   // ---------- camera: tight on the founder at first, opening up as the colony grows ----------
   function playCam(S) {
-    if (G.placing || !S || S.phase === 'day') return { f: [6.8, 6.2, 0.6], z: 1, k: 0 };
-    const n = S.buildings.length - 1 + Math.min(S.workers.length, 6) * 0.25;
-    // a phone needs the close-up to read one mosquito; a wide screen already shows her at a readable size
-    const narrow = Math.max(0, Math.min(1, (760 - stageRect().width) / 340));
-    const z = 1 + ((n < 0.5 ? 1.7 : n < 1.5 ? 1.42 : n < 3 ? 1.2 : 1) - 1) * narrow;
-    // two divisions on a phone: frame the whole bed, arm to foot, leaning a little toward the floor you are on
-    if (multi(S) && narrow > 0.3) { const lean = sim.div(S).site === 'foot' ? 0.45 : -0.45; return { f: [7.3 + lean, 4.9 - lean * 0.6, 1.9], z: 1 - 0.06 * narrow, k: 0.6 }; }
-    return { f: [6.4, 5.3, 1.6], z, k: z > 1.01 ? 0.85 : 0 };
+    if (G.placing || !S) return { f: [6.8, 6.2, 0.6], z: 1, k: 0 }; // placing: the whole floor, every pad
+    const narrow = Math.max(0, Math.min(1, (760 - stageRect().width) / 340)), n = S.buildings.length - 1 + Math.min(S.workers.length, 6) * 0.25;
+    let base;
+    if (S.phase === 'day') base = { f: [6.8, 6.0, 1.2], z: 1.12 + 0.1 * narrow, k: 0.6 };
+    // the first minutes: a phone needs the close-up to read one mosquito
+    else if (n < 3) { const z = 1 + ((n < 0.5 ? 1.7 : n < 1.5 ? 1.42 : 1.2) - 1) * narrow; base = { f: [6.4, 5.3, 1.6], z, k: z > 1.01 ? 0.85 : 0 }; }
+    // after that, close on the floor you are on: switching floors pans the camera across the bed
+    else { const k = C.SITES[sim.div(S).site].skin; base = { f: [k[0] * 0.55 + 6.6 * 0.45, k[1] * 0.55 + 5.6 * 0.45, 2.0], z: 1.3 + 0.22 * narrow, k: 0.85 }; }
+    // pinch, the wheel or +/- scale it; all the way out shows the whole room
+    const z = Math.max(0.92, Math.min(3, base.z * G.zoom)), k = base.k * Math.max(0, Math.min(1, (z - 0.92) / 0.35));
+    return { f: base.f, z, k };
   }
+  function zoomBy(f) { G.zoom = Math.max(0.6, Math.min(2.2, G.zoom * f)); }
   function stageRect() {
     if (G.mode === 'title') return $('title-stage').getBoundingClientRect();
     if (G.mode === 'opening') return { left: 0, top: innerHeight * 0.08, width: innerWidth, height: innerHeight * 0.72 };
