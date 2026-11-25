@@ -30,7 +30,7 @@ function play(camp, opts) {
       if (opts.handsOff && S.workers.length >= 2) S.hold = false;
       if (S.unlocked.includes('push') && opts.push) { const want = opts.push === 'always' || (opts.push === 'timed' && S.depth > 0.55); if ((S.pace === 2) !== want) sim.setPush(S, want); }
     }
-    sim.step(S, DT); if (opts.drain) { S.bank = 0; S.refined = 0; }
+    sim.step(S, DT); if (opts.drain) { S.bank = 0; S.refined = 0; } if (opts.tick) opts.tick(S);
     for (const e of S.events) {
       if (opts.onEvent) opts.onEvent(e, S);
       if (e.type === 'deliver' && e.founder && log.firstDeposit === null) log.firstDeposit = S.time;

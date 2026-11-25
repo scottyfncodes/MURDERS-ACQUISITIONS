@@ -78,6 +78,11 @@
   // pads on the bedroom floor, in the order they fill; [x, y] in diorama tiles
   const PADS = [[0.9, 8.6], [6.2, 7.6], [8.9, 7.4], [3.6, 8.9], [11.5, 7.8], [11.9, 0.5], [8.8, 9.7], [0.7, 6.4], [11.9, 5.3], [6.1, 9.9], [11.3, 9.8]];
   const SITES = { arm: { skin: [4.95, 6.55, 2.6], rig: [3.4, 6.8] }, foot: { skin: [10.55, 3.35, 2.6], rig: [10.7, 3.9] } };
+  // operating divisions: each runs its own crew, irritation, hand and infrastructure at a bite site.
+  // The arm is the original division; acquisitions add more. `site` is where the division starts the night
+  const DIVISIONS = { arm: { name: 'Upper Extremities', short: 'Arm', site: 'arm' } };
+  const DIVISION_ORDER = ['arm'];
+  const DIVISION_BUILDINGS = ['rig', 'drip', 'lookout'];
 
   const POLICIES = [
     { id: 'overtime', name: 'Mandatory Overtime', text: 'Loads are 30% bigger. Morale drifts down. Pizza is implied.', apply: (S) => { S.mods.extract *= 1.3; S.mods.moraleDrift -= 0.08; } },
@@ -278,6 +283,6 @@
     ['Mornings', 'The colony keeps. Every night starts where the last one ended.'],
   ];
 
-  MA.config = { PALETTE, FEEL, ECON, PACE, BUILDINGS, BUILD_ORDER, NEST, ZONES, PADS, SITES, POLICIES, SLEEPERS, HOST, FOUNDER, OPENING, NOTES, MORNING, FIRST, LAST, TRAITS, JOB_NAMES, MEMOS, RATINGS, RANKS, HANDBOOK, HANDBOOK_CORP };
+  MA.config = { PALETTE, FEEL, ECON, PACE, BUILDINGS, BUILD_ORDER, NEST, ZONES, PADS, SITES, DIVISIONS, DIVISION_ORDER, DIVISION_BUILDINGS, POLICIES, SLEEPERS, HOST, FOUNDER, OPENING, NOTES, MORNING, FIRST, LAST, TRAITS, JOB_NAMES, MEMOS, RATINGS, RANKS, HANDBOOK, HANDBOOK_CORP };
   if (typeof module !== 'undefined') module.exports = MA;
 })(typeof window !== 'undefined' ? window : globalThis);

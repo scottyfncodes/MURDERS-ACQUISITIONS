@@ -273,4 +273,40 @@ const runNight = (S, secs, each) => { while (S.state === 'playing' && S.time < s
   assert.ok(rl.lost > rn.lost * 0.3, 'but a reckless colony with a lookout is nowhere near invulnerable');
   assert.ok(cn.per[5].blood > cn.per[0].blood * 4, 'a growing workforce keeps paying');
 }
+
+// ---------- divisions: the foundation for acquisitions ----------
+// the PR #6 behaviour is reproduced exactly (tests/golden/baseline.json, recorded from the PR #6 code)
+{ const diffs = require('./regression.js').check(true); assert.strictEqual(diffs, 0, 'identical to the PR #6 golden baseline, including saves written by PR #6'); console.log('regression identical to PR #6'); }
+// two divisions run independently: a test-only division at the foot, registered just for this block
+{
+  C.DIVISIONS.test = { name: 'Test Division', short: 'Test', site: 'foot' };
+  const crew = (n, dv, from) => Array.from({ length: n }, (_, i) => ({ id: from + i, name: `${dv} ${i}`, trait: 'Quiet', larvae: 50, div: dv }));
+  const camp = K.cleanCampaign({ night: 3, divisions: ['arm', 'test', 'nowhere'], bank: 0, buildings: [{ type: 'tank', level: 3, pad: 1 }, { type: 'tank', level: 3, pad: 2 }, { type: 'pool', level: 3, pad: 9 }, { type: 'pool', level: 3, pad: 3 }, { type: 'rig', level: 1, div: 'arm' }, { type: 'rig', level: 2, div: 'test' }, { type: 'lookout', level: 1, div: 'test' }, { type: 'rig', level: 3, div: 'nowhere' }], workers: crew(4, 'arm', 1).concat(crew(7, 'test', 10)), nextId: 30, hires: 11, unlocks: ['tank', 'pool', 'scatter', 'rig', 'lookout', 'push'] });
+  assert.deepStrictEqual(camp.divisions, ['arm', 'test'], 'unknown divisions are dropped; the arm is always first');
+  assert.strictEqual(camp.buildings.filter((b) => b.type === 'rig').length, 2, 'one rig per division; a rig for an unknown division collapses onto the arm\'s');
+  const S = sim.newNight(camp, { seed: 5 }); S.schedule = []; S.hiring = false; S.rhythm = false;
+  const A = sim.div(S, 'arm'), T = sim.div(S, 'test'), d = sim.derived(S);
+  assert.strictEqual(sim.divs(S).length, 2); assert.strictEqual(d.divs.arm.slots, 6); assert.strictEqual(d.divs.test.slots, 9); assert.strictEqual(d.slots, 15);
+  assert.strictEqual(d.crewCap, d.divs.arm.crewCap + d.divs.test.crewCap, 'HR plans each division\'s crew');
+  const lw = S.workers.find((w) => w.job === 'lookout'); assert.ok(lw && lw.div === 'test' && lw.id === 10, 'each division\'s lookout comes from its own staff');
+  const foot = C.SITES.foot.skin, arm = C.SITES.arm.skin, near = (w, k) => Math.hypot(w.pos[0] - k[0], w.pos[1] - k[1]) < 2.5;
+  let seenFoot = 0, wrong = 0; const watch = (dv, k) => { for (const w of S.workers) if (w.div === dv && w.st === 'bite') { if (near(w, k)) seenFoot++; else wrong++; } };
+  T.pace = 2; runNight(S, 20, (x) => { x.bank = 0; x.refined = 0; A.recallT = 5; watch('test', foot); }); A.recallT = 0; // the arm is held off the skin; the test division pushes
+  assert.ok(seenFoot > 0 && wrong === 0, 'each crew bites at its own site');
+  assert.strictEqual(A.irritation, 0); assert.ok(T.irritation > 0, 'each division has its own itch');
+  seenFoot = 0; runNight(S, 30, (x) => { x.bank = 0; x.refined = 0; watch('arm', arm); }); assert.ok(seenFoot > 0 && wrong === 0, 'and the arm crew at the arm');
+  sim.setFocus(S, 'test'); assert.strictEqual(S.irritation, T.irritation, 'the HUD reads the focused division'); sim.setFocus(S, 'arm');
+  for (let i = 0; i < 600 && S.workers.filter((w) => w.div === 'test' && w.st === 'bite').length < 3; i++) { sim.step(S, DT); S.events.length = 0; T.hev = null; }
+  const armBefore = S.workers.filter((w) => w.div === 'arm').length; T.lookoutCd = 30; sim.startEvent(S, 'swat', null, 'test'); assert.ok(T.hev && !A.hev, 'a hazard belongs to one division');
+  runNight(S, S.time + 3); assert.strictEqual(S.workers.filter((w) => w.div === 'arm').length, armBefore, 'a swat at one division never kills the other\'s staff'); assert.ok(S.lost.length > 0);
+  S.recallCd = 0; assert.ok(sim.recall(S)); assert.ok(A.recallT > 0 && T.recallT > 0, 'Scatter is one button for every division');
+  T.recallT = 0; A.recallT = 0; T.lookoutCd = 0; for (let i = 0; i < 600 && S.workers.filter((w) => w.div === 'test' && w.st === 'bite').length < 3; i++) { sim.step(S, DT); S.events.length = 0; T.hev = null; }
+  sim.startEvent(S, 'swat', null, 'test'); let call = null; runNight(S, S.time + 2, (x) => { const e = x.events.find((ev) => ev.type === 'recall'); if (e) call = e; });
+  assert.ok(call && call.by === 'lookout' && call.div === 'test' && A.recallT === 0, 'a division\'s lookout pulls only its own crew');
+  const next = K.fold(camp, S, sim.report(S)); assert.deepStrictEqual(next.divisions, ['arm', 'test']); assert.ok(next.workers.every((w) => w.div === 'arm' || w.div === 'test') && next.workers.some((w) => w.div === 'test'), 'staff keep their division overnight');
+  assert.deepStrictEqual(K.fromSave(JSON.parse(JSON.stringify({ v: 2, settings: {}, campaign: next }))).campaign, next, 'a two-division colony round-trips through a save');
+  S.bank = 1e4; sim.build(S, 'rig', null, 'test'); assert.strictEqual(S.buildings.filter((b) => b.type === 'rig' && b.div === 'test')[0].level, 3, 'building a division\'s rig upgrades that division\'s rig');
+  delete C.DIVISIONS.test;
+  const back = K.cleanCampaign(next); assert.deepStrictEqual(back.divisions, ['arm']); assert.ok(back.workers.every((w) => w.div === 'arm'), 'if a division stops existing, its staff and buildings return to the arm');
+}
 console.log('sim ok');

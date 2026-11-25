@@ -48,6 +48,7 @@ There is no build step and there are no dependencies.
 | `tests/sim.test.js` | Headless simulation and save checks: `node tests/sim.test.js` |
 | `tests/balance.js` | Balance report, careful vs reckless with and without a lookout: `node tests/balance.js [nights] [seeds]` |
 | `tests/bot.js` | The test players (a human-paced night bot and a campaign runner) |
+| `tests/regression.js` | Golden regression against `tests/golden/baseline.json` (recorded from the PR #6 code), including loading old saves: `node tests/regression.js` |
 | `art-direction/` | The approved look and the shot list |
 
 Progress is saved under `murders-acquisitions.v2`. A save from the earlier one-shift game (`murders-acquisitions.v1`)

@@ -9,7 +9,7 @@
   const PLACEABLE = ['tank', 'pool', 'refinery'], SINGLES = ['rig', 'drip', 'windbreak', 'masks', 'lookout'];
 
   function newCampaign() {
-    return { night: 1, phase: 'night', bank: 0, refined: 0, zones: 1, suspicion: 0, counters: {}, newCounter: null, buildings: [], workers: [], lost: [], nextId: 1, hires: 0, unlocks: [], totals: { extracted: 0, nights: 0 }, history: [] };
+    return { night: 1, phase: 'night', divisions: ['arm'], bank: 0, refined: 0, zones: 1, suspicion: 0, counters: {}, newCounter: null, buildings: [], workers: [], lost: [], nextId: 1, hires: 0, unlocks: [], totals: { extracted: 0, nights: 0 }, history: [] };
   }
   function defaults() { return { v: 2, settings: { muted: false, seenOpening: false }, campaign: newCampaign(), archive: null }; }
 
@@ -24,11 +24,19 @@
     c.bank = num(raw.bank, 0, 1e7);
     c.phase = raw.phase === 'day' && c.night > 1 ? 'day' : 'night';
     c.zones = Math.min(C.ZONES.length, Math.max(1, int(raw.zones, 1, C.ZONES.length)));
+    // the divisions the company owns: always the arm (the original division), plus any acquisitions, in order
+    c.divisions = ['arm'].concat((Array.isArray(raw.divisions) ? raw.divisions : []).filter((id, i, a) => id !== 'arm' && C.DIVISIONS[id] && a.indexOf(id) === i));
+    const divOk = (id) => (c.divisions.includes(id) ? id : 'arm');
     const usedPads = new Set(), singles = new Set();
     for (const b of Array.isArray(raw.buildings) ? raw.buildings.slice(0, 40) : []) {
       if (!b || typeof b !== 'object') continue;
       const def = C.BUILDINGS[b.type];
-      if (SINGLES.includes(b.type)) { if (!singles.has(b.type)) { singles.add(b.type); c.buildings.push({ type: b.type, level: Math.max(1, int(b.level, 1, def.maxLevel)), pad: -1 }); } continue; }
+      if (SINGLES.includes(b.type)) {
+        // a division's rig, drip line and lookout are one per division; the rest are one per colony
+        const perDiv = C.DIVISION_BUILDINGS.includes(b.type), dv = perDiv ? divOk(b.div) : null, key = perDiv ? `${b.type}@${dv}` : b.type;
+        if (!singles.has(key)) { singles.add(key); c.buildings.push(Object.assign({ type: b.type, level: Math.max(1, int(b.level, 1, def.maxLevel)), pad: -1 }, perDiv ? { div: dv } : {})); }
+        continue;
+      }
       if (!PLACEABLE.includes(b.type)) continue;
       const pad = b.pad; // a pad out of range is dropped, never clamped onto a real one
       if (!Number.isInteger(pad) || pad < 0 || pad >= C.PADS.length || usedPads.has(pad)) continue;
@@ -39,7 +47,7 @@
     for (const w of Array.isArray(raw.workers) ? raw.workers.slice(0, 200) : []) {
       if (!w || typeof w !== 'object' || typeof w.name !== 'string') continue;
       const id = Math.max(1, int(w.id, 0, 1e6)); if (ids.has(id)) continue; ids.add(id); maxId = Math.max(maxId, id);
-      c.workers.push({ id, name: str(w.name, 40), trait: str(w.trait, 40), bio: str(w.bio, 120), larvae: int(w.larvae, 40, 9999), loads: int(w.loads, 0, 1e7), since: Math.max(1, int(w.since, 1, 9999)) });
+      c.workers.push({ id, name: str(w.name, 40), trait: str(w.trait, 40), bio: str(w.bio, 120), larvae: int(w.larvae, 40, 9999), loads: int(w.loads, 0, 1e7), since: Math.max(1, int(w.since, 1, 9999)), div: divOk(w.div) });
     }
     for (const w of Array.isArray(raw.lost) ? raw.lost.slice(-60) : []) {
       if (!w || typeof w !== 'object' || typeof w.name !== 'string') continue;
@@ -98,8 +106,9 @@
   function snapshot(camp, S) {
     return {
       night: camp.night, phase: camp.phase, newCounter: camp.newCounter, suspicion: camp.suspicion, counters: camp.counters, bank: S.bank, refined: S.refined, zones: S.zones,
-      buildings: S.buildings.filter((b) => b.type !== 'nest').map((b) => ({ type: b.type, level: b.level, pad: b.pad })),
-      workers: S.workers.map((w) => ({ id: w.id, name: w.name, trait: w.trait, bio: w.bio, larvae: w.larvae, loads: w.loads, since: w.since })),
+      divisions: S.divOrder.slice(),
+      buildings: S.buildings.filter((b) => b.type !== 'nest').map((b) => Object.assign({ type: b.type, level: b.level, pad: b.pad }, b.div ? { div: b.div } : {})),
+      workers: S.workers.map((w) => ({ id: w.id, name: w.name, trait: w.trait, bio: w.bio, larvae: w.larvae, loads: w.loads, since: w.since, div: w.div })),
       lost: camp.lost.concat(S.lost.map((w) => ({ name: w.name, trait: w.trait, larvae: w.larvae, night: camp.night, cause: w.cause }))),
       nextId: S.nextId, hires: S.hires, unlocks: S.unlocked.slice(), totals: camp.totals, history: camp.history,
     };
