@@ -3,7 +3,7 @@
 const assert = require('assert');
 require('../src/config.js'); require('../src/campaign.js'); require('../src/sim.js');
 const { sim, config: C, campaign: K } = globalThis.MA;
-const { play } = require('./bot.js');
+const { play, day } = require('./bot.js');
 const DT = 1 / 30;
 const run = (S, secs, each) => { for (let t = 0; t < secs && S.state !== 'over'; t += DT) { sim.step(S, DT); if (each) each(S); S.events.length = 0; } };
 const crew = (n, dv, from) => Array.from({ length: n }, (_, i) => ({ id: from + i, name: `${dv} ${from + i}`, trait: 'Quiet', larvae: 50, div: dv }));
@@ -141,8 +141,15 @@ const night = (camp, gain) => { const q = quiet(camp); q.r.suspicion = gain; q.r
   // the restructuring is reported as a restructuring
   const lines = C.MORNING.restructure(f); assert.ok(typeof lines === 'string' ? lines.length : lines.length, 'the morning has the corporate version');
   // no death spiral: a fumigated colony plays a full, productive night
-  const x = play(hot, { seed: 8, careful: true, handsOff: true, push: 'timed' });
-  assert.ok(x.r.extracted > 0.5 * play(booked, { seed: 8, careful: true, handsOff: true, push: 'timed' }).r.extracted, 'the colony keeps more than half its output the night after');
+  // consequential: the room airs out for three nights (the crew is kept off him for half, a third, a fifth of the night);
+  // recoverable: once it has, output is back
+  assert.strictEqual(hot.residue, C.ECON.residueNights); assert.ok(hot.morale < booked.morale, 'and morale takes a hit');
+  const chain = (start) => { let c = start; const outs = []; for (let i = 0; i < 5; i++) { if (i) c = Object.assign(day(c, c.night, { lookout: true }), { lastReport: c.lastReport }); const x = play(c, { seed: 8 + i, careful: true, handsOff: true, push: 'timed' }); outs.push(x.r.extracted); c = Object.assign(K.dawn(c, x.S, x.r), { lastReport: x.r }); } return outs; }; // the days in between rebuild, as a player would
+  const refine = (c) => Object.assign({}, c, { buildings: c.buildings.concat([{ type: 'refinery', level: 3, pad: 0 }, { type: 'refinery', level: 3, pad: 6 }]) });
+  const control = chain(refine(Object.assign({}, hot, { residue: 0, workers: booked.workers, morale: booked.morale, buildings: booked.buildings }))), fumed = chain(refine(hot));
+  console.log('fumigation  output with no fumigation', control.join(', '), '| after one', fumed.join(', '));
+  assert.ok(fumed[0] < control[0] * 0.8 && fumed[0] > control[0] * 0.3, 'the night after hurts, but the colony still works');
+  assert.ok(fumed[4] > control[4] * 0.75, 'once the room has aired out and the staff are rehired, output recovers');
 }
 
 // ---------- the lease and the annual report ----------

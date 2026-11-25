@@ -137,6 +137,8 @@ body.is-day .plate { background: rgba(28, 36, 72, .9); }
 .card span { font-size: 13px; color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .card.fresh { animation: pulse .9s infinite; border-color: var(--primary); }
 .inspector.placing b { color: var(--primary); }
+.card.hinted small { color: var(--primary); font-weight: 700; } .card.limit small { color: var(--muted); font-style: italic; font-weight: 400; }
+.costs { font-size: var(--t-s); color: var(--muted); margin: 8px 0 0; }
 .card.can { border-color: var(--primary); } .card.can span { color: var(--primary); }
 .card.deny { animation: shake .3s; border-color: var(--accent); } .card.deny span { color: var(--accent); }
 .card:active { transform: translateY(2px); }
@@ -223,6 +225,7 @@ body.is-cine .title { display: none; }
 .review-grid dd { margin: 0; font-family: var(--display); font-size: 17px; white-space: nowrap; color: var(--primary); font-variant-numeric: tabular-nums; }
 .best { font-size: var(--t-s); color: var(--muted); }
 .career { font-size: var(--t-s); color: var(--muted); margin-top: calc(var(--s2) * -1); } .career.promo { color: var(--primary); font-weight: 700; }
+.hostbox h3 { font-size: var(--t-xs); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); } .hostbox p { margin: 4px 0 0; font-size: var(--t-s); }
 .promo h3 { font-size: var(--t-xs); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); } .promo .sub { margin: 2px 0 0; font-size: var(--t-xs); }
 .promo ul { list-style: none; padding: 0; margin-top: 4px; font-size: var(--t-s); display: grid; gap: 2px; } .promo li span { color: var(--primary); font-weight: 700; }
 .memoriam h3 { font-size: var(--t-xs); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
