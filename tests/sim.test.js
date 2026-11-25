@@ -105,7 +105,7 @@ const runNight = (S, secs, each) => { while (S.state === 'playing' && S.time < s
 // clotting: raw blood loses a share at dawn, refined blood keeps; spending takes raw first
 {
   const S = sim.newNight(colony(), { seed: 1 }); S.refined = 40; assert.strictEqual(sim.report(S).clotted, Math.round(60 * C.ECON.clotShare), 'only the raw part clots');
-  S.unlocked.push('refinery'); assert.ok(sim.build(S, 'refinery', 3)); assert.ok(Math.abs(S.refined - 30) < 1e-9 && Math.abs(S.bank - 30) < 1e-9, 'a 70 mL purchase from 60 raw + 40 refined takes all 60 raw before 10 refined');
+  S.unlocked.push('refinery'); assert.ok(sim.build(S, 'refinery', 3)); assert.ok(Math.abs(S.refined - 30) < 1e-9 && Math.abs(S.bank - 30) < 1e-9, 'a 70 BU purchase from 60 raw + 40 refined takes all 60 raw before 10 refined');
   const T = sim.newNight(colony({ buildings: [{ type: 'tank', level: 1, pad: 1 }, { type: 'pool', level: 2, pad: 9 }, { type: 'refinery', level: 1, pad: 3 }] }), { seed: 2 });
   runNight(T, 30, (x) => { x.irritation = 0; }); assert.ok(T.refined > 30 && T.refined <= T.bank + 1e-9, 'the refinery refines stored blood through the night');
   const D = sim.newNight(colony({ phase: 'day', buildings: [{ type: 'tank', level: 1, pad: 1 }, { type: 'refinery', level: 1, pad: 3 }] }), { day: true, seed: 2 }); runNight(D, 30); assert.strictEqual(D.refined, 0, 'nothing refines while the day has no clock');

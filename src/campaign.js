@@ -205,7 +205,7 @@
     const housing = camp.buildings.filter((b) => b.type === 'pool').reduce((a, b) => a + 3 * b.level, 0);
     const out = [`Night ${camp.night} runs ${Math.round(nightLength(camp.night))} seconds, ${Math.round(nightLength(camp.night) - nightLength(camp.night - 1))} longer than last night.`];
     const clot = camp.history[0] && camp.history[0].clotted;
-    if (clot && !counts.refinery) out.push(`${clot} mL clotted overnight. A refinery keeps blood from going off.`);
+    if (clot && !counts.refinery) out.push(`${clot} BU clotted overnight. A refinery keeps blood from going off.`);
     if (!counts.pool) out.push('Build a breeding pool. Employees do the biting for you.');
     else if (camp.workers.length >= housing) out.push('Every pool is full. Another pool means more staff.');
     if (camp.workers.length >= C.ECON.slotsBase && !camp.unlocks.includes('rig')) out.push('The arm fits three at a time. When it gets crowded, we can build a rig.');

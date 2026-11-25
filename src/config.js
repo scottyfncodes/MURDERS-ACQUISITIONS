@@ -30,7 +30,7 @@
     irritationPerBiter: 0.5, eventThreshold: 40, eventRelief: 28, eventCooldown: 9.5,
     scratchKill: 0.25, swatKill: 0.6, scratchSleepCost: 3, swatSleepCost: 6, stirSleepCost: 15, lateLightSleepAt: 225,
     quotas: [300, 1000, 2100, 3400], maxLevel: 3,
-    // the founder bites by hand: she holds 5 mL, drinks it in about 1.4 s, and itches him if she keeps going
+    // the founder bites by hand: she holds 5 BU, drinks it in about 1.4 s, and itches him if she keeps going
     nestCap: 30, bellyMl: 5, drinkMlPerS: 3.6, greedIrritationPerS: 24, slotsBase: 3,
     // raw blood does not keep: at dawn this share of whatever is unrefined has clotted; refined blood keeps
     clotShare: 0.4, refineMlPerS: 1.6,
@@ -71,17 +71,17 @@
 
   // `unlock` is when a card first appears: never on a timer, always because the operation hit a wall
   const BUILDINGS = {
-    nest: { name: 'Bottle cap', short: 'HQ', cost: Infinity, growth: 1, blurb: 'Where it all began. Holds 30 mL. Rhonda calls it HQ.', effect: () => 'Holds 30 mL', gain: '', maxLevel: 1 },
-    tank: { name: 'Storage tank', short: 'Tank', cost: 25, growth: 1.7, blurb: 'Holds blood until it is spent. Crews unload at the nearest storage.', effect: (l) => `Holds ${Math.round(120 * (1 + 0.75 * (l - 1)))} mL`, gain: '+120 mL storage', place: true, maxLevel: 6 },
+    nest: { name: 'Bottle cap', short: 'HQ', cost: Infinity, growth: 1, blurb: 'Where it all began. Holds 30 BU. Rhonda calls it HQ.', effect: () => 'Holds 30 BU', gain: '', maxLevel: 1 },
+    tank: { name: 'Storage tank', short: 'Tank', cost: 25, growth: 1.7, blurb: 'Holds blood until it is spent. Crews unload at the nearest storage.', effect: (l) => `Holds ${Math.round(120 * (1 + 0.75 * (l - 1)))} BU`, gain: '+120 BU storage', place: true, maxLevel: 6 },
     pool: { name: 'Breeding pool', short: 'Pool', cost: 20, growth: 2.1, blurb: 'Standing water. Hatches staff and houses them, technically.', effect: (l) => `Houses ${3 * l} staff`, gain: '+3 staff', place: true },
     rig: { name: 'Extraction rig', short: 'Rig', cost: 80, growth: 1.8, blurb: 'Bite stations on the subject. More staff on skin at once.', effect: (l) => `${3 + 3 * l} bite spots`, gain: '+3 bite spots', single: true, maxLevel: 5 },
-    refinery: { name: 'Refinery', short: 'Refinery', cost: 70, growth: 1.9, blurb: 'Refines stored blood so it keeps overnight. Raw blood clots by morning.', effect: (l) => `Refines ${(1.6 * l).toFixed(1)} mL/s`, gain: 'Stops clotting', place: true, maxLevel: 6 },
+    refinery: { name: 'Refinery', short: 'Refinery', cost: 70, growth: 1.9, blurb: 'Refines stored blood so it keeps overnight. Raw blood clots by morning.', effect: (l) => `Refines ${(1.6 * l).toFixed(1)} BU/s`, gain: 'Stops clotting', place: true, maxLevel: 6 },
     drip: { name: 'Drip line', short: 'Drip', cost: 110, growth: 1, blurb: 'A funnel at the bite, piped straight to storage. Staff unload right where they drink.', effect: () => 'Unloads at the bite', gain: 'Shortest trips', single: true, maxLevel: 1 },
     windbreak: { name: 'Windbreak', short: 'Windbreak', cost: 90, growth: 1, blurb: 'A cereal box, flattened, between the fan and the bite. Flights are back to normal.', effect: () => 'Cancels the fan', gain: 'Cancels the fan', single: true, maxLevel: 1 },
     masks: { name: 'Gas masks', short: 'Masks', cost: 140, growth: 1, blurb: 'Tiny masks for every employee. Bites are back to normal speed. Morale is complicated.', effect: () => 'Cancels the repellent', gain: 'Cancels the repellent', single: true, maxLevel: 1 },
     lookout: { name: 'Lookout', short: 'Lookout', cost: 60, growth: 2.5, blurb: 'Occupational Health & Safety. One employee in hi-vis on a perch above the bite, with a whistle. Calls swats, then files Form 7-B.', effect: (l) => l >= 2 ? 'Safety Officer · calls swats · 15 s of paperwork' : 'Calls swats · 24 s of paperwork', gain: 'Calls swats for you', upgradeGain: 'Faster paperwork', single: true, maxLevel: 2 },
     acquire: { name: 'Acquire the foot', short: 'Acquisition', cost: 5000, growth: 1, blurb: 'Lower Extremities: one ankle, sticking out from under the blanket. Slower bites, bigger loads, kicks instead of swats. Arrives with no staff and no infrastructure.', effect: () => 'A second division', gain: 'A second division', single: true, maxLevel: 1, acquire: 'foot' },
-    plant: { name: 'Processing plant', short: 'Plant', cost: 200, growth: 2, blurb: 'A vertically integrated subsidiary at the acquired site: its own storage and its own refining. Staff there unload into it.', effect: (l) => `Holds ${200 * l} mL · refines ${(2 * l).toFixed(0)} mL/s`, gain: '+200 mL storage, +2 mL/s refining', upgradeGain: 'Expand the plant', single: true, maxLevel: 3, acquiredOnly: true },
+    plant: { name: 'Processing plant', short: 'Plant', cost: 200, growth: 2, blurb: 'A vertically integrated subsidiary at the acquired site: its own storage and its own refining. Staff there unload into it.', effect: (l) => `Holds ${200 * l} BU · refines ${(2 * l).toFixed(0)} BU/s`, gain: '+200 BU storage, +2 BU/s refining', upgradeGain: 'Expand the plant', single: true, maxLevel: 3, acquiredOnly: true },
     lab: { name: 'Saliva R&D', short: 'R&D', cost: 900, growth: 1, blurb: 'A research lab under the bed. Mosquito saliva numbs the skin and thins the blood. We intend to monetise both.', effect: () => 'Unlocks research', gain: 'Opens research', single: true, maxLevel: 1 },
     numbing: { name: 'Numbing agent', short: 'Numbing', cost: 600, growth: 2.4, blurb: 'R&D: a stronger anaesthetic in the saliva. He feels less of every bite, so the itch builds slower.', effect: (l) => `${Math.round((1 - C_RESEARCH.numbing.itch[l]) * 100)}% less itch`, gain: '15% less itch', upgradeGain: (l) => `${Math.round((1 - C_RESEARCH.numbing.itch[l + 1]) * 100)}% less itch`, single: true, maxLevel: 3, requires: 'lab' },
     thinner: { name: 'Blood thinner', short: 'Thinner', cost: 500, growth: 2.4, blurb: 'R&D: an anticoagulant in the saliva. Blood flows faster, so every bite is quicker and fuller. The welts are bigger, so he notices more of them.', effect: (l) => `Bites ${Math.round((1 - C_RESEARCH.thinner.bite[l]) * 100)}% faster and ${Math.round((C_RESEARCH.thinner.load[l] - 1) * 100)}% fuller; welts ${Math.round((C_RESEARCH.thinner.notice[l] - 1) * 100)}% bigger`, gain: 'Faster, but noticed', upgradeGain: (l) => `Bites ${Math.round((1 - C_RESEARCH.thinner.bite[l + 1]) * 100)}% faster`, single: true, maxLevel: 3, requires: 'lab' },
@@ -101,7 +101,7 @@
   const SITES = { arm: { skin: [4.95, 6.55, 2.6], rig: [3.4, 6.8] }, foot: { skin: [10.55, 3.4, 5.0], rig: [10.7, 3.9] } };
   // operating divisions: each runs its own crew, irritation, hand and infrastructure at a bite site.
   // The arm is the original division; acquisitions add more. `site` is where the division starts the night
-  // bite: bite time; load: mL per bite; itch: irritation per biter; minor/major: its hazards (the lookout calls the major one);
+  // bite: bite time; load: BU per bite; itch: irritation per biter; minor/major: its hazards (the lookout calls the major one);
   // socks: times a night the site goes under the covers
   // R&D: what each level of research does (index = level)
   const C_RESEARCH = {
@@ -144,7 +144,7 @@
     { id: 'quiet', name: 'Quiet Hours', text: 'The subject is 25% slower to irritate. Please whine softly.', apply: (S) => { S.mods.irritation *= 0.75; } },
     { id: 'interns', rank: 2, name: 'Unpaid Internship', text: 'Six interns start immediately. They are thrilled to be here.', apply: (S, sim) => { S.mods.housing += 6; for (let i = 0; i < 6; i++) sim.hire(S, true); } },
     { id: 'drill', rank: 3, name: 'Quarterly Safety Drill', text: 'All Hands Back is ready twice as often.', apply: (S) => { S.mods.recallCd *= 0.5; } },
-    { id: 'buyback', rank: 4, name: 'Stock Buyback', text: '+200 mL banked, effective immediately. Do not ask from where.', apply: (S) => { S.bank += 200; } },
+    { id: 'buyback', rank: 4, name: 'Stock Buyback', text: '+200 BU banked, effective immediately. Do not ask from where.', apply: (S) => { S.bank += 200; } },
   ];
 
   const SLEEPERS = [
@@ -186,7 +186,7 @@
     alarmSoon: 'Twenty seconds to the alarm. Last call on the arm.',
     dayStart: (n) => n === 1 ? 'He is at work until six. No clock, no hand. Build what we need, then call nightfall. — R.' : `Day ${n}. He left at 8:04. The building is ours until six. — R.`,
     dayBite: 'He is at work. Nothing to bite until tonight.',
-    clotted: (ml) => `Overnight, ${ml} mL clotted in the tanks. Raw blood does not keep. A refinery would fix that. — R.`,
+    clotted: (ml) => `Overnight, ${ml} BU clotted in the tanks. Raw blood does not keep. A refinery would fix that. — R.`,
     refineryBuilt: 'The refinery is running. Refined blood keeps. I am calling it "shelf-stable". — R.',
     dripNeed: 'Staff are flying the long way to storage. A drip line at the bite would pipe it home.',
     floorNeed: 'We are out of floor. The window side is unclaimed. For now.',
@@ -222,8 +222,8 @@
     leaseOver: 'His lease is up. He is moving. So are we. The annual report is on your desk. — R.',
     annual: (t, leaseN) => ({
       title: t.lost > 40 ? 'A record year' : 'A disciplined year',
-      note: `Host #${leaseN}: ${t.extracted.toLocaleString('en-US')} mL over the lease. ${t.lost} colleagues lost${t.fumigations ? `, ${t.fumigations} restructuring${t.fumigations === 1 ? '' : 's'}` : ''}. Executive compensation has been adjusted accordingly (upward). His lease is up, and so is ours: corporate has found a new address. — R.`,
-      grid: [['Collected', `${t.extracted.toLocaleString('en-US')} mL`], ['Best night', `${t.best.toLocaleString('en-US')} mL`], ['Hired', String(t.hired)], ['Lost', String(t.lost)], ['Restructurings', String(t.fumigations)], ['Cancelled', String(t.cancelled)]],
+      note: `Host #${leaseN}: ${t.extracted.toLocaleString('en-US')} BU over the lease. ${t.lost} colleagues lost${t.fumigations ? `, ${t.fumigations} restructuring${t.fumigations === 1 ? '' : 's'}` : ''}. Executive compensation has been adjusted accordingly (upward). His lease is up, and so is ours: corporate has found a new address. — R.`,
+      grid: [['Collected', `${t.extracted.toLocaleString('en-US')} BU`], ['Best night', `${t.best.toLocaleString('en-US')} BU`], ['Hired', String(t.hired)], ['Lost', String(t.lost)], ['Restructurings', String(t.fumigations)], ['Cancelled', String(t.cancelled)]],
     }),
     nightStart: (n, staff) => n === 2 ? `Night 2. ${staff ? `${staff} on payroll. ` : ''}Same arm, bigger plans. — R.` : `Night ${n}. ${staff} on payroll. Let's circle back to the arm. — R.`,
     idle: [
@@ -239,21 +239,21 @@
 
   // the first morning, and every morning after: what happened, and what tonight could be
   const MORNING = {
-    headline: (r) => r.extracted === 0 && r.storageFullSec > 4 ? 'Storage was full. All night.' : r.storageFullSec > 4 && r.lostToStorage > r.extracted * 0.3 ? 'We ran out of places to put it.' : r.night === 1 ? `${r.extracted} mL. Not bad for one mosquito.` : r.lost.length ? 'We lost people last night.' : `${r.extracted} mL. ${r.staff} employees. One vision.`,
+    headline: (r) => r.extracted === 0 && r.storageFullSec > 4 ? 'Storage was full. All night.' : r.storageFullSec > 4 && r.lostToStorage > r.extracted * 0.3 ? 'We ran out of places to put it.' : r.night === 1 ? `${r.extracted} BU. Not bad for one mosquito.` : r.lost.length ? 'We lost people last night.' : `${r.extracted} BU. ${r.staff} employees. One vision.`,
     suspicion: (s, gain, next) => `Suspicion ${Math.round(s)}% (${gain >= 0 ? '+' : ''}${Math.round(gain)} last night, less what he forgets today).${next ? ` At ${next.at}% he ${next.id === 'fan' ? 'buys something' : 'buys something else'}.` : ''}`,
     bought: (s, id) => `Suspicion ${Math.round(s)}%. He has had enough: he is buying a ${id === 'fan' ? 'fan' : 'mosquito repellent'} today.`,
     // what held us back: each line is a cause, roughly what it cost, and what would fix it. Most expensive first
     held: (r) => {
       const t = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`, out = [];
-      if (r.storageFullSec > 4) out.push({ ml: r.lostToStorage, text: `Storage was full for ${t(r.storageFullSec)}. About ${r.lostToStorage} mL had nowhere to go.`, fix: 'Build or upgrade a tank.' });
+      if (r.storageFullSec > 4) out.push({ ml: r.lostToStorage, text: `Storage was full for ${t(r.storageFullSec)}. About ${r.lostToStorage} BU had nowhere to go.`, fix: 'Build or upgrade a tank.' });
       if (r.lost.length) {
         const by = r.deadBy, parts = [['swat', 'swats'], ['scratch', 'scratches'], ['kick', 'kicks'], ['rub', 'rubs']].filter(([k]) => by[k]).map(([k, w]) => `${by[k]} to ${w}`).join(', '), minor = (by.scratch || 0) + (by.rub || 0), major = (by.swat || 0) + (by.kick || 0);
         const late = r.deadWhileCooling ? ` ${r.deadWhileCooling} died with Scatter still recharging.` : r.deadOnReport ? ` ${r.deadOnReport} died while the lookout filed paperwork.` : '';
-        out.push({ ml: r.replaceCost, text: `We lost ${r.lost.length}${parts ? ` (${parts})` : ''}.${late} Replacing them costs about ${r.replaceCost} mL.`, fix: !r.lookout ? 'A lookout calls swats for you. Ease off in light sleep.' : minor >= major ? (by.rub ? 'Scratches and rubs are yours: lookouts only call swats and kicks. Scatter early.' : 'Scratches are yours: the lookout only does swats. Scatter early.') : r.lookout < 2 && r.deadOnReport ? 'Promote the lookout: Safety Officers file faster.' : 'Ease off in light sleep. Scatter early.' });
+        out.push({ ml: r.replaceCost, text: `We lost ${r.lost.length}${parts ? ` (${parts})` : ''}.${late} Replacing them costs about ${r.replaceCost} BU.`, fix: !r.lookout ? 'A lookout calls swats for you. Ease off in light sleep.' : minor >= major ? (by.rub ? 'Scratches and rubs are yours: lookouts only call swats and kicks. Scatter early.' : 'Scratches are yours: the lookout only does swats. Scatter early.') : r.lookout < 2 && r.deadOnReport ? 'Promote the lookout: Safety Officers file faster.' : 'Ease off in light sleep. Scatter early.' });
       }
-      if (r.offArmSec > 10) out.push({ ml: r.lostToInterruptions, text: `The line stopped ${r.hits + r.calls} times (${r.hits} ${r.deadBy && (r.deadBy.rub !== undefined) && r.divisions && r.divisions.length > 1 ? 'hands and feet' : 'hands'}, ${r.calls} Scatters). ${t(r.offArmSec)} off the arm, about ${r.lostToInterruptions} mL.`, fix: r.lookout ? 'Ease off when he goes light.' : 'Ease off when he goes light, and push when he is deep.' });
-      if (r.lostToCrowd > 20) out.push({ ml: r.lostToCrowd, text: `Staff queued for a spot on the arm. About ${r.lostToCrowd} mL of standing around.`, fix: r.rigMaxed ? 'The rig is as big as it gets.' : 'An extraction rig fits more on.' });
-      if (r.clotted > 0) out.push({ ml: r.clotted, text: `${r.clotted} mL clotted by morning.`, fix: r.refineries ? 'More refining, or spend it before dawn.' : 'A refinery keeps it.' });
+      if (r.offArmSec > 10) out.push({ ml: r.lostToInterruptions, text: `The line stopped ${r.hits + r.calls} times (${r.hits} ${r.deadBy && (r.deadBy.rub !== undefined) && r.divisions && r.divisions.length > 1 ? 'hands and feet' : 'hands'}, ${r.calls} Scatters). ${t(r.offArmSec)} off the arm, about ${r.lostToInterruptions} BU.`, fix: r.lookout ? 'Ease off when he goes light.' : 'Ease off when he goes light, and push when he is deep.' });
+      if (r.lostToCrowd > 20) out.push({ ml: r.lostToCrowd, text: `Staff queued for a spot on the arm. About ${r.lostToCrowd} BU of standing around.`, fix: r.rigMaxed ? 'The rig is as big as it gets.' : 'An extraction rig fits more on.' });
+      if (r.clotted > 0) out.push({ ml: r.clotted, text: `${r.clotted} BU clotted by morning.`, fix: r.refineries ? 'More refining, or spend it before dawn.' : 'A refinery keeps it.' });
       if (r.fanLoss) out.push({ ml: r.fanLoss, text: 'The fan slowed every flight.', fix: 'A windbreak cancels it.' });
       if (r.repellentLoss) out.push({ ml: r.repellentLoss, text: 'The repellent slowed every bite.', fix: 'Gas masks cancel it.' });
       if (r.hrCapped && !out.length) out.push({ ml: 0, text: `HR stopped hiring at ${r.crewCap}: the arm only has ${r.slots} spots.`, fix: 'An extraction rig, not a pool.' });
@@ -267,13 +267,13 @@
     susStatus: (n) => n.booking ? `He has booked an exterminator. It comes in ${n.nightsLeft} night${n.nightsLeft === 1 ? '' : 's'} unless his suspicion is under ${n.cancelBelow}% that morning. Ease off; lie low.` : n.next ? `At ${n.next.at}% he buys something. At 100% he calls an exterminator.` : 'At 100% he calls an exterminator.',
     booked: 'He googled "mosquitoes bedroom". Then "how many mosquitoes is too many". Then "exterminator near me". — R.',
     cancelled: 'He cancelled the exterminator. Something came up. We will not be finding out what. — R.',
-    restructure: (f) => `${f.lost.length} colleague${f.lost.length === 1 ? ' was' : 's were'} let go, most recent hires first${f.byDiv.length > 1 ? ` (${f.byDiv.map((d) => `${d.lost} from ${d.id === 'foot' ? 'Lower' : 'Upper'} Extremities`).join(', ')})` : ''}. Raw inventory written off: ${f.raw} mL. ${f.pools ? `${f.pools} pool${f.pools === 1 ? '' : 's'} downsized. ` : ''}Executive leadership (${f.executives + 1}) was in a meeting and is unharmed.`,
+    restructure: (f) => `${f.lost.length} colleague${f.lost.length === 1 ? ' was' : 's were'} let go, most recent hires first${f.byDiv.length > 1 ? ` (${f.byDiv.map((d) => `${d.lost} from ${d.id === 'foot' ? 'Lower' : 'Upper'} Extremities`).join(', ')})` : ''}. Raw inventory written off: ${f.raw} BU. ${f.pools ? `${f.pools} pool${f.pools === 1 ? '' : 's'} downsized. ` : ''}Executive leadership (${f.executives + 1}) was in a meeting and is unharmed.`,
     fumigatedNote: 'He had someone in at nine. Leadership was offsite. — R.',
     restructureHead: 'A leaner, more agile organisation.',
     restructureNote: 'This was a difficult decision for leadership. Rehiring is half price for two nights. Thoughts and prayers have been issued. Targets are unchanged. — R.',
-    divisionLine: (d) => `${d.extracted} mL · ${d.staff} staff${d.lost ? ` · ${d.lost} lost` : ''}${d.offline ? ` · dark ${Math.round(d.offline)}s` : ''}`,
+    divisionLine: (d) => `${d.extracted} BU · ${d.staff} staff${d.lost ? ` · ${d.lost} lost` : ''}${d.offline ? ` · dark ${Math.round(d.offline)}s` : ''}`,
     lease: (k, n) => `Night ${k} of ${n}`,
-    clot: (r) => r.clotted > 0 ? `${r.clotted} mL clotted overnight${r.refined ? `; ${r.refined} mL was refined and kept` : ''}.` : r.refined ? `${r.refined} mL refined. Nothing clotted.` : '',
+    clot: (r) => r.clotted > 0 ? `${r.clotted} BU clotted overnight${r.refined ? `; ${r.refined} BU was refined and kept` : ''}.` : r.refined ? `${r.refined} BU refined. Nothing clotted.` : '',
     note: (r) => r.night === 1 ? (r.staff ? 'Last night it was just me. This morning we are a company. — R.' : 'Tonight we hire. Nobody builds an empire alone. — R.') : r.lost.length ? 'We keep going. It is what they would have wanted. Probably. — R.' : 'He has no idea. Let\'s keep it that way. — R.',
   };
 
@@ -350,6 +350,7 @@
   const HANDBOOK = [
     ['The bite', 'Press and hold anywhere in the room. Rhonda flies to the arm and drinks. Let go and she flies the blood home.'],
     ['Do not get greedy', 'Drinking past full makes him itch. When the hand starts to move, let go.'],
+    ['Blood Units', 'Everything is measured in BU (Blood Units), a proprietary metric. Legal asked us to stop using real units. Do not ask what one is.'],
     ['Storage', 'Blood is kept in the bottle cap and your tanks. When storage is full, nobody can unload.'],
     ['Staff', 'Breeding pools hatch employees. They bite and carry on their own, all night.'],
     ['Placement', 'You choose where things go. Storage close to the bite means shorter trips.'],

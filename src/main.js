@@ -68,7 +68,7 @@
   function titleStatus() {
     const c = save.campaign;
     const k = K.leaseNight(c), L = C.ECON.leaseNights;
-    $('title-status').textContent = c.night === 1 && !c.workers.length ? 'Night 1 · Subject asleep since 11:42 PM' : c.leaseEnded ? 'The lease is up · annual report' : c.phase === 'day' && k <= 1 ? `Moving day · Host #${c.host.n} · ${c.workers.length} on payroll` : c.phase === 'day' ? `Day ${k - 1} of ${L} · He is at work · ${c.workers.length} on payroll` : `Night ${k} of ${L} · ${c.workers.length} on payroll · ${fmt(c.bank)} mL stored`;
+    $('title-status').textContent = c.night === 1 && !c.workers.length ? 'Night 1 · Subject asleep since 11:42 PM' : c.leaseEnded ? 'The lease is up · annual report' : c.phase === 'day' && k <= 1 ? `Moving day · Host #${c.host.n} · ${c.workers.length} on payroll` : c.phase === 'day' ? `Day ${k - 1} of ${L} · He is at work · ${c.workers.length} on payroll` : `Night ${k} of ${L} · ${c.workers.length} on payroll · ${fmt(c.bank)} BU stored`;
   }
 
   // ---------- the opening ----------
@@ -94,10 +94,10 @@
   function li(head, right, sub) { const el = document.createElement('li'), b = document.createElement('b'), s = document.createElement('span'), i = document.createElement('i'); b.textContent = head; s.textContent = sub; i.textContent = right; el.append(b, i, s); return el; }
   function showRecords() {
     const c = save.campaign, list = $('reviews-list'), old = $('archive-list'); list.innerHTML = ''; old.innerHTML = '';
-    $('reviews-sub').textContent = c.history.length ? `${c.totals.nights} night${c.totals.nights === 1 ? '' : 's'} on file · ${fmt(c.totals.extracted)} mL collected · ${c.lost.length} lost` : 'The company has no records yet. Clock in to start one.';
-    for (const h of c.history) list.append(li(`Night ${h.night}`, `${fmt(h.extracted)}`, `${fmt(h.extracted)} mL · ${h.staff} on payroll · ${h.lost} lost`));
+    $('reviews-sub').textContent = c.history.length ? `${c.totals.nights} night${c.totals.nights === 1 ? '' : 's'} on file · ${fmt(c.totals.extracted)} BU collected · ${c.lost.length} lost` : 'The company has no records yet. Clock in to start one.';
+    for (const h of c.history) list.append(li(`Night ${h.night}`, `${fmt(h.extracted)}`, `${fmt(h.extracted)} BU · ${h.staff} on payroll · ${h.lost} lost`));
     const a = save.archive; $('archive').hidden = !a;
-    if (a) { $('archive-sub').textContent = `${a.shifts} shift${a.shifts === 1 ? '' : 's'} at Plant No. 1${a.best ? ` · best: ${a.best.rating}` : ''}.`; for (const r of a.reviews) old.append(li(`Shift ${r.shiftNo} · ${r.rating}`, String(r.score), `${r.sleeper} · ${fmt(r.extracted)} mL · ${r.casualties} lost`)); }
+    if (a) { $('archive-sub').textContent = `${a.shifts} shift${a.shifts === 1 ? '' : 's'} at Plant No. 1${a.best ? ` · best: ${a.best.rating}` : ''}.`; for (const r of a.reviews) old.append(li(`Shift ${r.shiftNo} · ${r.rating}`, String(r.score), `${r.sleeper} · ${fmt(r.extracted)} BU · ${r.casualties} lost`)); }
     openModal('reviews');
   }
 
@@ -117,7 +117,7 @@
     const sb = G.selected && S.buildings.find((x) => x.id === G.selected);
     if (sb) {
       const def = C.BUILDINGS[sb.type], cost = sim.upgradeCost(sb), extra = sb.type === 'tank' || sb.type === 'drip' ? ` · trip ${sim.tripSeconds(S, sb).toFixed(1)} s` : '';
-      p.innerHTML = `<div class="inspector"><span><b>${def.name} · Lv ${sb.level}</b><small>${def.effect(sb.level)}${extra}. ${def.blurb}</small></span><button type="button" class="up" id="upgrade" ${cost === Infinity ? 'disabled' : ''}>${cost === Infinity ? 'Fully upgraded' : `Upgrade · ${fmt(cost)} mL`}</button><button type="button" class="x" id="deselect" aria-label="Close">×</button></div>`;
+      p.innerHTML = `<div class="inspector"><span><b>${def.name} · Lv ${sb.level}</b><small>${def.effect(sb.level)}${extra}. ${def.blurb}</small></span><button type="button" class="up" id="upgrade" ${cost === Infinity ? 'disabled' : ''}>${cost === Infinity ? 'Fully upgraded' : `Upgrade · ${fmt(cost)} BU`}</button><button type="button" class="x" id="deselect" aria-label="Close">×</button></div>`;
       $('upgrade').addEventListener('click', () => { sim.upgrade(S, sb.id); drainEvents(); renderPanel(); });
       $('deselect').addEventListener('click', () => { G.selected = null; audio.play('click'); renderPanel(); });
       return;
@@ -152,7 +152,7 @@
     for (const type in cards) {
       const def = C.BUILDINGS[type], cost = sim.costOf(S, type, S.focus), el = cards[type], mine = def.single && S.buildings.find((b) => b.type === type && (!C.DIVISION_BUILDINGS.includes(type) || (b.div || 'arm') === S.focus));
       const own = def.single ? (mine ? `Lv ${mine.level}` : 'new') : d.counts[type] ? `×${d.counts[type]}` : 'new';
-      const up = !def.single && !sim.freePads(S).length && cost !== Infinity, cheap = up ? sim.cheapestUpgrade(S, type) : null, price = cost === Infinity ? (def.single ? `Max · ${own}` : `Maxed · ${own}`) : up ? `${fmt(cost)} mL · ${own}` : `${fmt(cost)} mL · ${own}`;
+      const up = !def.single && !sim.freePads(S).length && cost !== Infinity, cheap = up ? sim.cheapestUpgrade(S, type) : null, price = cost === Infinity ? (def.single ? `Max · ${own}` : `Maxed · ${own}`) : up ? `${fmt(cost)} BU · ${own}` : `${fmt(cost)} BU · ${own}`;
       const owned = !!mine, sub = up ? (cheap ? `Upgrade one to Lv ${cheap.level + 1}` : 'Upgrade one') : owned && cost === Infinity && def.requires ? def.effect(mine.level) : owned && def.upgradeGain ? (typeof def.upgradeGain === 'function' ? def.upgradeGain(mine.level) : def.upgradeGain) : def.gain; if (el._sub !== sub) { el._sub = sub; el.children[1].textContent = sub; }
       if (el._price !== price) { el._price = price; el.children[2].textContent = price; }
       el.classList.toggle('can', cost <= S.bank);
@@ -274,8 +274,8 @@
     $('review-eyebrow').textContent = `${C.MORNING.lease(ln, C.ECON.leaseNights)} · 6:30 AM`; $('review-h').textContent = news.fumigation ? C.MORNING.restructureHead : C.MORNING.headline(r); $('review-note').textContent = news.fumigation ? C.MORNING.fumigatedNote : C.MORNING.note(r);
     // after a restructuring the morning counts the company that is left, not the one that went to bed
     const fum = news.fumigation, crew = fum ? save.campaign.workers : S.workers;
-    $('r-extracted').textContent = `${fmt(r.extracted)} mL`; $('r-manual').textContent = `${fmt(r.manual)} mL`; $('r-auto').textContent = `${fmt(r.auto)} mL`;
-    $('r-banked').textContent = `${fmt(fum ? save.campaign.bank : r.banked)} mL`; $('r-staff').textContent = String(crew.length); $('r-lost').textContent = String(r.lost.length + (fum ? fum.lost.length : 0));
+    $('r-extracted').textContent = `${fmt(r.extracted)} BU`; $('r-manual').textContent = `${fmt(r.manual)} BU`; $('r-auto').textContent = `${fmt(r.auto)} BU`;
+    $('r-banked').textContent = `${fmt(fum ? save.campaign.bank : r.banked)} BU`; $('r-staff').textContent = String(crew.length); $('r-lost').textContent = String(r.lost.length + (fum ? fum.lost.length : 0));
     const names = crew.map((w) => w.name), shown = names.slice(0, 6);
     $('r-staff-list').textContent = names.length > 6 ? `${shown.join(', ')} and ${names.length - 6} more.` : names.length > 1 ? `${shown.slice(0, -1).join(', ')} and ${shown[shown.length - 1]}.` : `${shown[0] || ''}.`;
     $('r-payroll').hidden = crew.length === 0;
@@ -287,7 +287,7 @@
     const clot = C.MORNING.clot(r); $('r-clot').hidden = !clot; $('r-clot').textContent = clot;
     // each division's night, then the suspicion breakdown: where it came from, what he forgets, what happens next
     const dv = $('r-divs'); dv.hidden = r.divisions.length < 2; dv.innerHTML = '';
-    for (const x of r.divisions) { const el = document.createElement('div'), b = document.createElement('b'), st = document.createElement('strong'), sp = document.createElement('span'); b.textContent = C.DIVISIONS[x.id].name; st.textContent = `${fmt(x.extracted)} mL`; sp.textContent = C.MORNING.divisionLine(fum ? Object.assign({}, x, { staff: crew.filter((w) => w.div === x.id).length }) : x).replace(/^[^·]+· /, ''); el.append(b, st, document.createElement('br'), sp); dv.append(el); }
+    for (const x of r.divisions) { const el = document.createElement('div'), b = document.createElement('b'), st = document.createElement('strong'), sp = document.createElement('span'); b.textContent = C.DIVISIONS[x.id].name; st.textContent = `${fmt(x.extracted)} BU`; sp.textContent = C.MORNING.divisionLine(fum ? Object.assign({}, x, { staff: crew.filter((w) => w.div === x.id).length }) : x).replace(/^[^·]+· /, ''); el.append(b, st, document.createElement('br'), sp); dv.append(el); }
     const fm = news.fumigation; $('r-fum').hidden = !fm; if (fm) { $('r-fum-text').textContent = C.MORNING.restructure(fm); $('r-fum-note').textContent = C.MORNING.restructureNote; }
     const sv = news.suspicion, sl = $('r-sus-list'); sl.innerHTML = '';
     const row = (label, v, cls) => { const li = document.createElement('li'), i = document.createElement('i'); if (cls) li.className = cls; li.textContent = label; i.textContent = v; li.append(i); sl.append(li); };
@@ -332,7 +332,7 @@
     if (tut.step === 'bite') return f.st === 'drink' ? ['Keep holding. Watch her fill up.'] : ['Press and hold anywhere to bite'];
     if (tut.step === 'fill') return idle ? ['Hold to bite. Let go to bring it home.'] : null;
     if (tut.step === 'tank') return ['Storage is full. Tap Storage tank below.'];
-    if (tut.step === 'pool') { const c = sim.costOf(S, 'pool'); return c <= S.bank ? ['Tap Breeding pool below. You need staff.'] : idle ? [`Bite until you have ${c} mL for a breeding pool.`] : null; }
+    if (tut.step === 'pool') { const c = sim.costOf(S, 'pool'); return c <= S.bank ? ['Tap Breeding pool below. You need staff.'] : idle ? [`Bite until you have ${c} BU for a breeding pool.`] : null; }
     if (tut.step === 'eggs') return ['Eggs are hatching…'];
     if (tut.step === 'crew' && now - G.hireAt < 7) return ['Your first employee works on their own. Watch.'];
     return null;
@@ -344,11 +344,11 @@
     // before a refinery: what is stored / what the tanks hold. After: everything spendable, with the tanks' raw fill as a gauge
     const hasRef = S.buildings.some((b) => b.type === 'refinery'), rawNow = sim.raw(S), tanksFull = rawNow >= d.cap - 0.5;
     set('v-bank', fmt(Math.floor(G.bankShown))); set('v-cap', hasRef ? '' : `/${fmt(d.cap)}`);
-    const rate = Math.round(S.rate / 5) * 5; show('v-rate', rate > 0); if (rate > 0) set('v-rate', `+${rate} mL/min`);
+    const rate = Math.round(S.rate / 5) * 5; show('v-rate', rate > 0); if (rate > 0) set('v-rate', `+${rate} BU/min`);
     $('p-bank').classList.toggle('full', tanksFull);
     if (S.phase === 'day') { set('l-clock', 'At work'); set('v-clock', `Day ${S.night - 1}`); }
     else { set('l-clock', 'Alarm in'); set('v-clock', clock(S.shiftLen - S.sleepLost - S.time)); $('p-clock').classList.toggle('cut', S.shiftLen - S.sleepLost - S.time < 20); }
-    show('p-refined', hasRef); if (hasRef) { const w = Math.round((rawNow / Math.max(1, d.cap)) * 100); if (G.shown.rw !== w) { G.shown.rw = w; $('b-refined').style.width = w + '%'; $('p-refined').title = `Tanks ${Math.floor(rawNow)}/${d.cap} mL raw · ${Math.floor(S.refined)} mL refined`; } }
+    show('p-refined', hasRef); if (hasRef) { const w = Math.round((rawNow / Math.max(1, d.cap)) * 100); if (G.shown.rw !== w) { G.shown.rw = w; $('b-refined').style.width = w + '%'; $('p-refined').title = `Tanks ${Math.floor(rawNow)}/${d.cap} BU raw · ${Math.floor(S.refined)} BU refined`; } }
     show('p-staff', S.hires > 0 || S.workers.length > 0);
     if (multi(S)) {
       const mine = S.workers.filter((w) => (w.lent || w.div) === S.focus).length, other = sim.divs(S).find((D) => D.id !== S.focus);

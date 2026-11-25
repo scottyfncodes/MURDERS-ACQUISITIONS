@@ -34,7 +34,7 @@
     if (e.type === 'build') { const c = e.b.type === 'rig' ? SITES[S.site].rig : MA.sim.padCenter(e.b); if (c) fx.parts.push({ kind: 'ring', x: c[0], y: c[1], z: 0, t: -FEEL.build_drop_ms / 1000, life: 0.5 }); }
     else if (e.type === 'deliver') {
       fx.parts.push({ kind: 'pop', x: e.at[0], y: e.at[1], z: e.at[2] - 0.4, t: 0, life: 0.35 });
-      if (e.founder) label(`+${Math.round(e.ml)} mL`, pal.primary, [e.at[0], e.at[1], e.at[2] + 0.6], 1.1);
+      if (e.founder) label(`+${Math.round(e.ml)} BU`, pal.primary, [e.at[0], e.at[1], e.at[2] + 0.6], 1.1);
       else if (e.first) { label('AUTOMATED', pal.primary, [e.at[0], e.at[1], e.at[2] + 1.0], 2.4, true); fx.flare = Math.max(fx.flare, 0.6); }
     }
     else if (e.type === 'impact') {
@@ -271,7 +271,7 @@
           if (S.hatching && b === pools[0] && S.state === 'playing') {
             const k = clamp(S.hatchProgress, 0, 1), e = P(x + 1, y + 0.9, dz + 0.32 + lv * 0.06), wob = !fx.reduced && k > 0.6 ? Math.sin(t * 24) * s * 0.05 * k : 0, r = s * (0.18 + 0.2 * k);
             ctx.fillStyle = pal.egg; ctx.beginPath(); ctx.ellipse(e[0] + wob, e[1], r, r * 0.55, 0, 0, Math.PI); ctx.ellipse(e[0] + wob, e[1], r, r * 1.25, 0, Math.PI, 0); ctx.fill(); ell([e[0] - r * 0.3 + wob, e[1] - r * 0.6], r * 0.22, r * 0.3, 'rgba(255,255,255,.6)');
-            if (k >= 1 && S.bank < S.hatchCost) tag(e[0], e[1] - s * 1.3, `${Math.ceil(S.hatchCost)} mL TO HATCH`, pal.primary);
+            if (k >= 1 && S.bank < S.hatchCost) tag(e[0], e[1] - s * 1.3, `${Math.ceil(S.hatchCost)} BU TO HATCH`, pal.primary);
           }
         }
         if (opt.selected === b.id) sel(x, y, 2.0, 1.7);

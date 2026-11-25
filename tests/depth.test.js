@@ -16,7 +16,7 @@ function throughput(camp, secs) { const S = sim.newNight(camp, { seed: 4 }); S.s
   const S = sim.newNight(colony({ workers: crew(1, 6, 1).concat(crew(1, 4, 2), crew(1, 1, 3)) }), { seed: 1 });
   assert.deepStrictEqual(S.workers.map((w) => sim.rankOf(S, w)), [0, 1, 2], 'nights served make the rank: hired tonight, two nights, five nights');
   const interns = throughput(colony({ workers: crew(8, 6, 1) })).ml, partners = throughput(colony({ workers: crew(8, 1, 1), camp: { night: 12 } })).ml;
-  console.log('careers    interns', interns, 'mL/min, partners', partners);
+  console.log('careers    interns', interns, 'BU/min, partners', partners);
   assert.ok(partners > interns * 1.3, 'a crew of partners brings in a third more than a crew of interns');
   // promotions are announced at dawn
   const camp = colony({ workers: crew(2, 5, 1).concat(crew(2, 2, 3)) }), x = play(camp, { seed: 2, careful: true, handsOff: true }), n = K.dawn(camp, x.S, x.r);

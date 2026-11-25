@@ -3,7 +3,7 @@
 *"We're all just trying to make a living."*
 
 An incremental factory game. One ambitious mosquito finds the perfect sleeping human and builds a blood-extraction
-company under his bed, one night at a time.
+company under his bed, one night at a time. Blood is counted in BU (Blood Units), the company's proprietary metric.
 
 ## Play
 
@@ -36,7 +36,7 @@ There is no build step and there are no dependencies.
   cancels; otherwise the bedroom is fumigated (a "workforce restructuring": 40% of non-executive staff, newest first,
   all raw blood, one level off every pool; suspicion drops to 40%, three nights' grace, half-price rehiring for two).
   The morning report itemises suspicion: bites per division, each disturbance, bodies found, and what he forgot.
-- **Acquisitions**: once the arm's rig is maxed (night 3+), the board offers **the foot** (5,000 mL). A second division
+- **Acquisitions**: once the arm's rig is maxed (night 3+), the board offers **the foot** (5,000 BU). A second division
   with no staff and no infrastructure: bigger, slower bites, less itch, rubs and kicks instead of scratches and swats,
   and socks (the blanket) three times a night. When he rolls onto the arm, the arm goes dark and lends its crew to the foot.
 - With two divisions each gets a **General Manager** (its longest-serving employee) who runs it to a policy (lie low,
@@ -52,7 +52,7 @@ There is no build step and there are no dependencies.
   less itch. **Blood thinner**: faster, fuller bites, but bigger welts (each bite is noticed more).
 - **Premium levels**: storage tanks and refineries go to level 6 (gold hoops, gold stacks) at steeply rising prices.
 - **He deflates**: the more of him the company has taken (tonight, and over the lease), the paler and flatter he gets.
-  He has a comfortable nightly limit (8,000 mL, half as much again with the foot); past it each bite brings up less,
+  He has a comfortable nightly limit (8,000 BU, half as much again with the foot); past it each bite brings up less,
   down to a trickle. The new host after a relocation arrives full.
 - **Camera**: close on the floor you are on. Pinch, scroll or +/- to zoom; all the way out shows the whole room.
 - The colony, its staff and its stored blood carry over from night to night.
