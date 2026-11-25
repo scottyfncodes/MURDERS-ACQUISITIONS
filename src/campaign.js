@@ -6,7 +6,7 @@
   const C = MA.config;
 
   const V1_KEY = 'murders-acquisitions.v1', V2_KEY = 'murders-acquisitions.v2';
-  const PLACEABLE = ['tank', 'pool', 'refinery'], SINGLES = ['rig', 'drip', 'windbreak', 'masks'];
+  const PLACEABLE = ['tank', 'pool', 'refinery'], SINGLES = ['rig', 'drip', 'windbreak', 'masks', 'lookout'];
 
   function newCampaign() {
     return { night: 1, phase: 'night', bank: 0, refined: 0, zones: 1, suspicion: 0, counters: {}, newCounter: null, buildings: [], workers: [], lost: [], nextId: 1, hires: 0, unlocks: [], totals: { extracted: 0, nights: 0 }, history: [] };

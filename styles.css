@@ -63,6 +63,7 @@ a.haveanapp-byline__by:hover, a.haveanapp-byline__by:focus-visible { text-decora
 .plate em { display: block; font-style: normal; font-size: 11px; font-weight: 700; color: var(--primary); white-space: nowrap; margin-top: 1px; }
 .plate.full strong { color: var(--accent); }
 .rbar { display: block; height: 4px; border-radius: 2px; background: var(--bg-deep); margin-top: 3px; overflow: hidden; }
+.plate.full .rbar i { background: var(--accent); }
 .rbar i { display: block; height: 100%; width: 0; background: var(--primary); border-radius: 2px; transition: width .3s ease-out; }
 .recall.nightfall { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); box-shadow: 0 4px 0 var(--primary-edge); }
 .recall.nightfall:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--primary-edge); }
@@ -99,9 +100,17 @@ body.is-day .plate { background: rgba(28, 36, 72, .9); }
 .pace #push[aria-pressed="true"] { background: var(--accent); color: #fff; }
 .pace.arrive { animation: arrive .45s cubic-bezier(.2, 1.5, .4, 1); }
 #p-irr small { letter-spacing: .02em; font-size: 10.5px; } #p-irr.light small { color: var(--accent); } #p-irr.deep small { color: var(--sleep); }
+.held h3 { font-size: var(--t-xs); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+.held ul { list-style: none; padding: 0; margin-top: 4px; display: grid; gap: 6px; }
+.held li { background: var(--surface); border-radius: 10px; padding: 8px 12px; font-size: var(--t-s); line-height: 1.4; border-left: 4px solid var(--accent); }
+.held li span { display: block; color: var(--primary); font-weight: 700; margin-top: 2px; }
+.held li.none { border-left-color: #54c08a; }
 .sus { font-size: var(--t-s); color: var(--muted); } .sus.alarm { color: var(--accent); font-weight: 700; }
 .recall { flex: 1 1 auto; max-width: 340px; min-height: 52px; padding: 0 12px; border-radius: 10px; background: var(--surface); border: 1.5px solid var(--line); font-family: var(--display); font-size: 17px; letter-spacing: .05em; white-space: nowrap; color: var(--text); position: relative; overflow: hidden; }
 .recall.cooling { color: var(--muted); }
+.recall { min-width: 0; }
+.recall small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--body); font-weight: 700; font-size: 10.5px; letter-spacing: .02em; color: #ff9d4d; margin-top: 1px; }
+.recall small.busy { color: var(--muted); }
 .recall::after { content: ''; position: absolute; left: 0; bottom: 0; height: 4px; width: var(--cd, 0%); background: var(--muted); }
 .recall.alarm { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); animation: alarm .35s infinite alternate; }
 @keyframes alarm { to { box-shadow: 0 0 0 5px rgba(255, 198, 92, .35); } }
@@ -126,6 +135,10 @@ body.is-day .plate { background: rgba(28, 36, 72, .9); }
 .inspector .up[disabled] { background: var(--surface); color: var(--muted); box-shadow: none; border: 1.5px solid var(--line); }
 .inspector .x { width: 44px; min-height: 48px; border-radius: 10px; border: 1.5px solid var(--line); font-size: 20px; }
 
+/* narrow phones (iPhone SE, mini): the action row has to fit Scatter, the pace switch and two icons in 343 px */
+@media (max-width: 389px) {
+  .actions { gap: 5px; } .recall { padding: 0 8px; font-size: 15px; } .pace button { padding: 0 9px; font-size: 13px; } .icon-btn { width: 44px; }
+}
 @media (min-width: 700px) {
   .hud { padding: calc(var(--safe-t) + var(--s3)) calc(var(--safe-r) + var(--s4)) calc(var(--safe-b) + var(--s3)) calc(var(--safe-l) + var(--s4)); }
   .hud-top { gap: var(--s2); max-width: 760px; width: 100%; margin: 0 auto; }

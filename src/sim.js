@@ -16,7 +16,7 @@
     const host = C.HOST, n = camp.night, day = !!opts.day, len = day ? Infinity : MA.campaign.nightLength(n), fresh = camp.hires === 0 && camp.buildings.length === 0;
     const S = {
       seed, rand: mulberry(seed), night: n, phase: day ? 'day' : 'night', host, sleeper: host, state: 'playing', time: 0, shiftLen: len, sleepLost: 0, wakeT: 0,
-      bank: camp.bank, refined: Math.min(camp.bank, camp.refined || 0), zones: camp.zones || 1, refineRate: 0, counters: Object.assign({}, camp.counters || {}), suspicion: 0, depth: 1, rhythm: n >= 2 && !day, wave: 0, extracted: 0, spent: 0, taken: 0, supply: host.supply, irritation: 0, morale: 70, pace: 1, hold: false, hiring: true,
+      bank: camp.bank, refined: Math.min(camp.bank, camp.refined || 0), zones: camp.zones || 1, refineRate: 0, counters: Object.assign({}, camp.counters || {}), suspicion: 0, lookoutCd: 0, depth: 1, rhythm: n >= 2 && !day, wave: 0, extracted: 0, spent: 0, taken: 0, supply: host.supply, irritation: 0, morale: 70, pace: 1, hold: false, hiring: true,
       founder: { pos: [NEST[0] + 0.3, NEST[1] + 0.2, 0.9], st: 'home', t: 0, dur: 1, from: null, to: null, belly: 0, greed: 0, trips: 0 },
       workers: [], lost: [], nextId: camp.nextId, hires: camp.hires, buildings: [], nextBid: 1,
       site: 'arm', siteBlocked: 0, covered: 0, recallT: 0, recallCd: 0, hev: null, eventCd: 4, armOut: 1, footOut: 0,
@@ -25,14 +25,15 @@
       mods: { extract: 1, bite: 1, refine: 1, hatch: 1, cap: 1, irritation: 1, kill: 1, recallCd: 1, housing: 0, moraleDrift: 0 },
       schedule: n >= 2 && !day ? [{ at: 0.35, kind: 'blanket' }, { at: 0.5, kind: 'roll' }, { at: 0.68, kind: 'blanket' }].map((e) => ({ at: Math.round(e.at * len), kind: e.kind })) : [],
       tut: n === 1 && fresh && !day ? { step: 'bite', at: 0, scratched: false } : null,
-      events: [], flags: {}, stats: { longTrip: 0, loads: 0, manualMl: 0, autoMl: 0, swats: 0, scratches: 0, nearMisses: 0, peakStaff: 0, queuedSeconds: 0, slotWait: 0, hires: 0, built: 0, idleNoteAt: 40, firstHireAt: null, firstAuto: false },
+      events: [], flags: {}, stats: { offArm: 0, stuckWS: 0, waitWS: 0, activeWS: 0, hireSpend: 0, calls: 0, lookoutCalls: 0, deadBy: { swat: 0, scratch: 0 }, deadWhileCooling: 0, deadOnReport: 0, hrCapped: false, longTrip: 0, loads: 0, manualMl: 0, autoMl: 0, swats: 0, scratches: 0, nearMisses: 0, peakStaff: 0, queuedSeconds: 0, slotWait: 0, hires: 0, built: 0, idleNoteAt: 40, firstHireAt: null, firstAuto: false },
     };
     S.wave = S.rand() * ECON.sleepCycleSeconds; if (S.rhythm) S.pace = 0;
     S.buildings.push({ id: S.nextBid++, type: 'nest', level: 1, pad: -2, born: -9 });
     for (const b of camp.buildings) S.buildings.push({ id: S.nextBid++, type: b.type, level: b.level, pad: b.pad, born: -9 });
     for (const w of camp.workers) S.workers.push(body(S, w, spawnPoint(S)));
     S.stats.peakStaff = S.workers.length;
-    S.bank = Math.min(S.bank, derived(S).cap); S.refined = Math.min(S.refined, S.bank);
+    S.refined = Math.min(S.refined, S.bank); S.bank = Math.min(S.bank, derived(S).cap + S.refined); // tanks hold raw blood; refined blood keeps elsewhere
+    assignLookout(S); for (const w of S.workers) if (w.job === 'lookout') w.pos = lookoutPoint(S).slice();
     if (n >= 2) {
       unlock(S, 'tank'); unlock(S, 'pool'); if (S.workers.length) unlock(S, 'scatter'); S.events.length = 0;
       if (!day) { const fresh2 = unlock(S, 'push'); S.events.length = 0; note(S, fresh2 ? NOTES.rhythm : NOTES.nightStart(n, S.workers.length), fresh2 ? 'warn' : 'info'); if (fresh2) S.events.push({ type: 'unlock', what: 'push' }); }
@@ -68,6 +69,7 @@
   function tripSeconds(S, b) { const k = skinPoint(S), p = storePoint(b, S); return 2 * ft(S, p, k); }
   function spawnPoint(S) { const pools = S.buildings.filter((b) => b.type === 'pool'); const b = pools.length ? pools[(S.workers.length) % pools.length] : null; const c = b ? padCenter(b) : NEST; return [c[0], c[1], 0.7]; }
 
+  function raw(S) { return Math.max(0, S.bank - S.refined); }
   function derived(S) {
     const d = { slots: ECON.slotsBase, cap: ECON.nestCap, housing: ECON.baseHousing + S.mods.housing, counts: { nest: 0, rig: 0, tank: 0, pool: 0, refinery: 0, hatchery: 0 }, rigLevel: 0 };
     for (const b of S.buildings) {
@@ -77,6 +79,8 @@
       else if (b.type === 'pool') d.housing += 3 * b.level;
     }
     d.cap = Math.round(d.cap * S.mods.cap);
+    d.lookout = (S.buildings.find((b) => b.type === 'lookout') || { level: 0 }).level;
+    d.crewCap = d.slots + ECON.reserveStaff + (d.lookout ? 1 : 0);
     return d;
   }
   function openPads(S) { return ZONES.slice(0, S.zones).flat(); }
@@ -119,13 +123,16 @@
     if (type === 'tank') unlock(S, 'pool');
     if (type === 'refinery') note(S, NOTES.refineryBuilt, 'good');
     if (NOTES.answered[type]) note(S, NOTES.answered[type], 'good');
+    if (type === 'lookout') { const w = assignLookout(S); if (w) note(S, NOTES.lookoutHired(w.name), 'good'); }
     return b;
   }
   function upgrade(S, id) {
     const b = S.buildings.find((x) => x.id === id); if (S.state !== 'playing' || !b) return null;
     const cost = upgradeCost(b);
     if (!pay(S, cost, b.type)) return null;
-    b.level++; b.born = S.time; S.events.push({ type: 'build', b, cost, upgrade: true }); return b;
+    b.level++; b.born = S.time; S.events.push({ type: 'build', b, cost, upgrade: true });
+    if (b.type === 'lookout') { const w = assignLookout(S); if (w) note(S, NOTES.lookoutPromoted(w.name), 'good'); }
+    return b;
   }
 
   // ---------- staff ----------
@@ -151,10 +158,23 @@
   function siteOpen(S) { return S.siteBlocked <= 0 && S.covered <= 0 && S.recallT <= 0 && !(S.hev && (S.hev.kind === 'roll' || S.hev.kind === 'stir')); }
   function waitPoint(S, w) { const r = sitePos(S).rig; return [r[0] + 0.6 + w.jit[0] * 1.6, r[1] + 1.2 + w.jit[1] * 1.2, 1.0 + w.jit[2] * 0.9]; }
 
+  // Occupational Health & Safety: the longest-serving employee is the lookout, on a perch above the bite
+  function lookoutPoint(S) { return S.site === 'arm' ? [4.05, 5.75, 3.55] : [9.7, 4.45, 3.55]; }
+  function assignLookout(S) {
+    const want = S.buildings.some((b) => b.type === 'lookout'); let cur = S.workers.find((w) => w.job === 'lookout');
+    if (!want) { if (cur) cur.job = 'extract'; return null; }
+    if (!cur && S.workers.length) { cur = S.workers.reduce((a, b) => (b.id < a.id ? b : a)); cur.job = 'lookout'; cur.st = 'post'; cur.carry = 0; const to = lookoutPoint(S); fly(cur, to, ft(S, cur.pos, to)); }
+    return cur || null;
+  }
+  function lookoutCall(S, w) {
+    const lv = derived(S).lookout; S.recallT = FEEL.recall_hold_s; S.lookoutCd = ECON.lookoutReport[Math.min(lv, ECON.lookoutReport.length) - 1];
+    S.stats.lookoutCalls++; retreat(S); S.events.push({ type: 'recall', by: 'lookout', at: w.pos.slice() });
+    once(S, 'lookoutCalled', () => note(S, NOTES.lookoutCalled(w.name), 'good'));
+  }
   function recall(S) {
     if (S.state !== 'playing' || S.recallCd > 0 || !S.unlocked.includes('scatter')) { S.events.push({ type: 'deny', what: 'recall' }); return false; }
     S.recallT = FEEL.recall_hold_s; S.recallCd = FEEL.recall_cooldown_s * S.mods.recallCd;
-    retreat(S); S.events.push({ type: 'recall' }); return true;
+    S.stats.calls++; retreat(S); S.events.push({ type: 'recall' }); return true;
   }
   function retreat(S) {
     for (const w of S.workers) if (w.job === 'extract' && (w.st === 'bite' || w.st === 'toSkin')) { w.st = 'retreat'; fly(w, waitPoint(S, w), 0.45); }
@@ -187,7 +207,7 @@
   }
   // unload into storage: whatever fits goes in; the rest waits in the belly until there is room
   function deposit(S, w, d, founder) {
-    const amount = founder ? w.belly : w.carry, room = Math.max(0, d.cap - S.bank), ml = Math.min(amount, room);
+    const amount = founder ? w.belly : w.carry, room = Math.max(0, d.cap - (S.bank - S.refined)), ml = Math.min(amount, room);
     if (ml > 0.001) {
       S.bank += ml; S.extracted += ml; S.stats.loads++;
       if (founder) { w.belly -= ml; S.stats.manualMl += ml; } else { w.carry -= ml; S.stats.autoMl += ml; w.loads++; S.recent.push([S.time, ml]); }
@@ -216,6 +236,10 @@
       let k = Math.round(onSkin.length * rate); if (onSkin.length && k === 0 && kind === 'swat' && !e.tutorial) k = 1;
       const dead = onSkin.sort(() => S.rand() - 0.5).slice(0, k);
       for (const w of dead) { S.workers.splice(S.workers.indexOf(w), 1); S.lost.push({ name: w.name, trait: w.trait, larvae: w.larvae, at: S.time, cause: kind }); }
+      if (dead.length) {
+        S.stats.deadBy[kind] += dead.length; if (S.recallCd > 0) S.stats.deadWhileCooling += dead.length; else if (e.busy) S.stats.deadOnReport += dead.length;
+        if (!e.tutorial && unlock(S, 'lookout')) note(S, NOTES.ohsFounded(dead[0].name), 'loss');
+      }
       // the founder is never killed: she is knocked off, and the blood she was carrying is gone
       const f = S.founder, hitFounder = f.st === 'drink' || (f.st === 'toSkin' && f.t / f.dur > 0.5);
       if (hitFounder) { f.belly = 0; f.st = 'knocked'; const p = f.pos; fly(f, [p[0] - 0.8, p[1] + 1.4, 0.6], 0.7); once(S, 'founderHit', () => note(S, NOTES.founderHit, 'warn')); }
@@ -229,7 +253,7 @@
       else if (nearMiss) note(S, MEMOS.nearMiss, 'good');
       if (e.tutorial && S.tut) { S.tut.scratched = true; S.tut.step = 'free'; }
       retreat(S);
-      S.events.push({ type: 'impact', kind, dead, nearMiss, founder: hitFounder, tutorial: e.tutorial, at: sitePos(S).skin.slice() });
+      S.events.push({ type: 'impact', kind, dead, nearMiss, onSkin: onSkin.length, founder: hitFounder, tutorial: e.tutorial, at: sitePos(S).skin.slice() });
     } else if (kind === 'stir') {
       S.sleepLost += ECON.stirSleepCost; S.suspicion += ECON.suspicionStir; S.irritation = 55; S.siteBlocked = 5; retreat(S); S.events.push({ type: 'impact', kind, dead: [] });
     } else if (kind === 'blanket') {
@@ -266,12 +290,12 @@
     const open = siteOpen(S);
 
     founderStep(S, dt, open);
-    if (S.tut && S.tut.step === 'fill' && S.bank >= d.cap - 0.01) { S.tut.step = 'tank'; }
-    if (S.bank >= d.cap - 0.01 && d.counts.tank === 0) once(S, 'nestFull', () => { note(S, NOTES.nestFull, 'warn'); unlock(S, 'tank'); });
+    if (S.tut && S.tut.step === 'fill' && S.bank - S.refined >= d.cap - 0.01) { S.tut.step = 'tank'; }
+    if (S.bank - S.refined >= d.cap - 0.01 && d.counts.tank === 0) once(S, 'nestFull', () => { note(S, NOTES.nestFull, 'warn'); unlock(S, 'tank'); });
 
     // the crew: wait for a free bite spot, bite, carry to the nearest storage, unload
     const site = sitePos(S), store = nearestStore(S), sp = storePoint(store, S), ex = S.workers.filter((w) => w.job === 'extract');
-    let onWay = ex.filter((w) => w.st === 'toSkin' || w.st === 'bite').length, biting = 0, queued = 0, waiting = 0;
+    let onWay = ex.filter((w) => w.st === 'toSkin' || w.st === 'bite').length, biting = 0, queued = 0, waiting = 0, active = 0;
     const biteDur = FEEL.bite_seconds * pace.bite * S.mods.bite * S.host.bite * repellentFactor(S) / prod;
     for (const w of ex) {
       w.t += dt;
@@ -281,11 +305,13 @@
           else waiting++;
         }
       } else if (w.st === 'toSkin') {
+        active++;
         if (w.t >= w.dur) { w.st = 'bite'; w.t = 0; w.dur = biteDur * (0.8 + S.rand() * 0.4); w.from = null; }
       } else if (w.st === 'bite') {
-        biting++;
+        biting++; active++;
         if (w.t >= w.dur) { const load = Math.min(ECON.loadMl * S.mods.extract, S.supply - S.taken); S.taken += load; w.carry = load; w.st = 'toTank'; const to = [sp[0] + w.jit[0] * 0.5, sp[1] + w.jit[1] * 0.5, sp[2] + 0.2]; fly(w, to, ft(S, w.pos, to)); }
       } else if (w.st === 'toTank' || w.st === 'queue') {
+        if (w.st === 'toTank') active++;
         if (w.t >= w.dur) {
           if (deposit(S, w, d, false)) { w.st = 'wait'; w.t = 0; w.delay = 0.15 + w.jit[2] * 0.3; w.from = null; w.to = null; }
           else { queued++; if (w.st !== 'queue') { w.st = 'queue'; fly(w, [sp[0] + 0.9 + w.jit[0] * 1.2, sp[1] + 0.8 + w.jit[1], sp[2] - 0.2 + w.jit[2] * 0.6], 0.5); } }
@@ -294,6 +320,7 @@
     }
     if (S.founder.st === 'drink') biting++;
     S.biting = biting; S.queued = queued;
+    S.stats.activeWS += active * dt; S.stats.stuckWS += queued * dt; S.stats.waitWS += waiting * dt; if (ex.length && !open) S.stats.offArm += dt;
     if (queued > 0) { S.stats.queuedSeconds += dt; if (S.stats.queuedSeconds > 3 && d.counts.tank > 0) once(S, 'fullMemo', () => note(S, NOTES.storageFull, 'warn')); }
     // logistics: when staff fly the long way to storage, the drip line is the answer
     if (S.workers.length && tripSeconds(S, store) > ECON.longTripSeconds) { S.stats.longTrip += dt; if (S.stats.longTrip > 3) once(S, 'dripNeed', () => { if (unlock(S, 'drip')) note(S, NOTES.dripNeed, 'warn'); }); }
@@ -307,12 +334,13 @@
     // the pools hatch staff on their own while there is housing and blood to pay for them
     const pools = d.counts.pool, first = S.hires === 0;
     S.hatchCost = first ? 0 : ECON.hireBase + S.workers.length * ECON.hirePerHead;
-    S.hatching = pools > 0 && S.hiring && S.workers.length < d.housing;
-    if (pools > 0 && S.workers.length >= d.housing) once(S, 'housing' + d.housing, () => { if (!first) note(S, NOTES.housingFull, 'warn'); });
+    S.hatching = pools > 0 && S.hiring && S.workers.length < Math.min(d.housing, d.crewCap);
+    if (pools > 0 && !first && S.workers.length >= d.crewCap && d.housing > d.crewCap) { S.stats.hrCapped = true; once(S, 'hr' + d.crewCap, () => note(S, NOTES.hrPause(d.slots), 'info')); }
+    if (pools > 0 && S.workers.length >= d.housing && d.housing <= d.crewCap) once(S, 'housing' + d.housing, () => { if (!first) note(S, NOTES.housingFull, 'warn'); });
     if (S.hatching) {
       S.hatchProgress = Math.min(1, S.hatchProgress + dt / (first ? ECON.firstHatchSeconds : ECON.hatchSeconds / Math.sqrt(pools)));
       if (S.hatchProgress >= 1 && S.bank >= S.hatchCost) {
-        S.hatchProgress = 0; spend(S, S.hatchCost); const w = hire(S, false);
+        S.hatchProgress = 0; spend(S, S.hatchCost); S.stats.hireSpend += S.hatchCost; const w = hire(S, false);
         if (w) {
           S.events.push({ type: 'hatch', w, first, at: w.pos.slice() });
           if (first) { S.stats.firstHireAt = S.time; if (!S.tut) unlock(S, 'scatter'); note(S, NOTES.firstHire(w.name), 'good'); if (S.tut) S.tut.step = 'crew'; }
@@ -330,6 +358,17 @@
     S.irritation = clamp(S.irritation + ((workersBiting + (S.founder.st === 'drink' ? 0.6 : 0)) * ECON.irritationPerBiter * depthMul * pace.irritation * S.host.irritation * S.mods.irritation - FEEL.irritation_decay_per_s * (late && S.night >= 2 ? 0.5 : 1)) * dt, 0, 100);
     // the first night teaches one disturbance at a time: the crew cannot provoke the hand before the lesson
     if (S.tut && !S.tut.scratched && S.founder.st !== 'drink') S.irritation = Math.min(S.irritation, 34);
+    S.lookoutCd = Math.max(0, S.lookoutCd - dt);
+    if (S.hev && !S.hev.hit && !S.hev.called && (S.hev.kind === 'swat' || S.hev.kind === 'scratch')) {
+      const e = S.hev, lw = S.workers.find((w) => w.job === 'lookout'), lv = d.lookout;
+      if (lw && e.t + dt >= ECON.lookoutReaction) {
+        e.called = true;
+        if (e.kind === 'scratch') once(S, 'lookoutScratch', () => note(S, NOTES.lookoutScratch, 'info'));
+        else if (S.recallT > 0) { /* already scattered */ }
+        else if (S.lookoutCd > 0) { e.busy = true; once(S, 'lookoutBusy', () => note(S, NOTES.lookoutBusy, 'warn')); }
+        else lookoutCall(S, lw);
+      }
+    }
     if (S.hev) {
       const e = S.hev; e.t += dt;
       if (!e.hit && e.t >= e.telegraph) impact(S);
@@ -354,6 +393,7 @@
 
   function moveWorkers(S, dt) {
     for (const w of S.workers) {
+      if (w.job === 'lookout' && S.state === 'playing') { w.t += dt; const to = lookoutPoint(S); if (!w.from && dist(w.pos, to) > 0.2) fly(w, to, ft(S, w.pos, to)); }
       if (S.state === 'waking') { if (!w.home) { w.home = true; const to = [5 + w.jit[0] * 6, 3.5 + w.jit[1] * 2, 0.4]; fly(w, to, 1.2 + w.jit[2]); } w.t += dt; }
       if (w.from && w.to) { const k = clamp(w.t / w.dur, 0, 1), e = k * k * (3 - 2 * k); w.pos = [w.from[0] + (w.to[0] - w.from[0]) * e, w.from[1] + (w.to[1] - w.from[1]) * e, w.from[2] + (w.to[2] - w.from[2]) * e + Math.sin(k * Math.PI) * 0.7]; if (k >= 1) w.from = null; }
     }
@@ -367,10 +407,17 @@
 
   function report(S) {
     const clotted = Math.round(Math.max(0, S.bank - S.refined) * ECON.clotShare), suspicion = Math.round(ECON.suspicionPerSqrtLoad * Math.sqrt(S.stats.loads) + S.suspicion);
-    return { night: S.night, suspicion, clotted, refined: Math.floor(S.refined), extracted: Math.round(S.extracted), manual: Math.round(S.stats.manualMl), auto: Math.round(S.stats.autoMl), staff: S.workers.length, hires: S.stats.hires, lost: S.lost.slice(), banked: Math.floor(S.bank), cap: derived(S).cap, nearMisses: S.stats.nearMisses, scratches: S.stats.scratches, swats: S.stats.swats, built: S.stats.built, names: S.workers.map((w) => w.name) };
+    // what a staff member collects per second: observed, or one bite-and-carry cycle when too little ran to measure
+    const d = derived(S), cycle = FEEL.bite_seconds + tripSeconds(S, nearestStore(S)) + 0.4, perWorker = S.stats.activeWS > 30 ? S.stats.autoMl / S.stats.activeWS : ECON.loadMl / cycle, open = Math.max(1, S.time - S.stats.offArm);
+    const hire = ECON.hireBase + S.workers.length * ECON.hirePerHead, auto = S.stats.autoMl;
+    const loss = { storageFullSec: Math.round(S.stats.queuedSeconds), lostToStorage: Math.round(S.stats.stuckWS * perWorker), lostToCrowd: Math.round(S.stats.waitWS * perWorker), offArmSec: Math.round(S.stats.offArm), lostToInterruptions: Math.round(S.stats.offArm * (auto / open)),
+      hits: S.stats.swats + S.stats.scratches, calls: S.stats.calls + S.stats.lookoutCalls, lookoutCalls: S.stats.lookoutCalls, deadBy: Object.assign({}, S.stats.deadBy), deadWhileCooling: S.stats.deadWhileCooling, deadOnReport: S.stats.deadOnReport,
+      replaceCost: S.lost.length * hire, hireSpend: Math.round(S.stats.hireSpend), lookout: d.lookout, refineries: d.counts.refinery, rigMaxed: d.rigLevel >= BUILDINGS.rig.maxLevel, crewCap: d.crewCap, slots: d.slots, hrCapped: S.stats.hrCapped,
+      fanLoss: windFactor(S) > 1 ? Math.round(auto * (1 - 1 / ECON.fanFlightFactor) * 0.5) : 0, repellentLoss: repellentFactor(S) > 1 ? Math.round(auto * (1 - 1 / ECON.repellentBiteFactor) * 0.4) : 0 };
+    return Object.assign(loss, { night: S.night, suspicion, clotted, refined: Math.floor(S.refined), extracted: Math.round(S.extracted), manual: Math.round(S.stats.manualMl), auto: Math.round(S.stats.autoMl), staff: S.workers.length, hires: S.stats.hires, lost: S.lost.slice(), banked: Math.floor(S.bank), cap: derived(S).cap, nearMisses: S.stats.nearMisses, scratches: S.stats.scratches, swats: S.stats.swats, built: S.stats.built, names: S.workers.map((w) => w.name) });
   }
 
-  const api = { newNight, step, build, upgrade, hire, setHold, setPace, setPush, windFactor, repellentFactor, setHiring, recall, pickPolicy, costOf, upgradeCost, derived, report, wake, openPads, cheapestUpgrade, startEvent, padCenter, storePoint, nearestStore, tripSeconds, freePads, padsByTrip, sitePos, siteOpen, skinPoint };
+  const api = { raw, newNight, step, lookoutPoint, assignLookout, build, upgrade, hire, setHold, setPace, setPush, windFactor, repellentFactor, setHiring, recall, pickPolicy, costOf, upgradeCost, derived, report, wake, openPads, cheapestUpgrade, startEvent, padCenter, storePoint, nearestStore, tripSeconds, freePads, padsByTrip, sitePos, siteOpen, skinPoint };
   MA.sim = api;
   if (typeof module !== 'undefined') module.exports = MA;
 })(typeof window !== 'undefined' ? window : globalThis);
