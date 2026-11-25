@@ -43,7 +43,7 @@
     // he forgets some of it each day: a fixed amount plus a share of what there is (so suspicion settles instead of only climbing)
     suspicionForgetBase: 10, suspicionForgetShare: 0.28,
     // the exterminator: booked when he reaches 100%, comes after this many nights unless that morning's suspicion is below cancelBelow
-    bookAt: 100, warningNights: 3, cancelBelow: 70,
+    bookAt: 100, warningNights: 3, cancelBelow: 80,
     // fumigation ("restructuring"): share of non-executive staff lost, suspicion afterwards, nights before he can book again,
     // nights of discounted rehiring and the discount
     fumigationStaffShare: 0.4, fumigatedSuspicion: 40, fumigationGrace: 3, rehireNights: 2, rehireDiscount: 0.5,
@@ -57,14 +57,14 @@
     // the lookout: how fast they call a swat, and the paperwork after every call (Form 7-B), by level. Swats only: scratches stay the player's
     lookoutReaction: 0.45, lookoutReport: [24, 15],
     // acquisitions: the foot is offered once the arm's rig reaches this level
-    acquireAtRig: 4,
+    acquireAtRig: 4, labFromNight: 4, drainNights: 8, premiumFrom: 3, premiumGrowth: 1.6, acquiredSupply: 0.5, dryFrom: 0.7, drySlope: 1.5, dryFloor: 0.15, dryCap: 1.6,
     // the acquired site's processing plant, per level
     plantCap: 200, plantRefine: 2,
     // General Managers read his sleep this many seconds late (untrained, after one seminar, after two), and push above this depth
     gmLag: [9, 4, 1.5], gmPushAbove: 0.55,
   };
   const PACE = [
-    { id: 'cautious', label: 'Ease off', bite: 1.25, fly: 1.1, irritation: 0.4, notice: 0.5, morale: 0.10 },
+    { id: 'cautious', label: 'Ease off', bite: 1.25, fly: 1.1, irritation: 0.4, notice: 0.4, morale: 0.10 },
     { id: 'standard', label: 'Standard', bite: 1.0, irritation: 1.0, notice: 1, morale: 0.02 },
     { id: 'aggressive', label: 'Aggressive', bite: 0.5, fly: 0.8, irritation: 2.0, notice: 1.6, morale: -0.05 },
   ];
@@ -72,22 +72,25 @@
   // `unlock` is when a card first appears: never on a timer, always because the operation hit a wall
   const BUILDINGS = {
     nest: { name: 'Bottle cap', short: 'HQ', cost: Infinity, growth: 1, blurb: 'Where it all began. Holds 30 mL. Rhonda calls it HQ.', effect: () => 'Holds 30 mL', gain: '', maxLevel: 1 },
-    tank: { name: 'Storage tank', short: 'Tank', cost: 25, growth: 1.7, blurb: 'Holds blood until it is spent. Crews unload at the nearest storage.', effect: (l) => `Holds ${Math.round(120 * (1 + 0.75 * (l - 1)))} mL`, gain: '+120 mL storage', place: true },
+    tank: { name: 'Storage tank', short: 'Tank', cost: 25, growth: 1.7, blurb: 'Holds blood until it is spent. Crews unload at the nearest storage.', effect: (l) => `Holds ${Math.round(120 * (1 + 0.75 * (l - 1)))} mL`, gain: '+120 mL storage', place: true, maxLevel: 6 },
     pool: { name: 'Breeding pool', short: 'Pool', cost: 20, growth: 2.1, blurb: 'Standing water. Hatches staff and houses them, technically.', effect: (l) => `Houses ${3 * l} staff`, gain: '+3 staff', place: true },
     rig: { name: 'Extraction rig', short: 'Rig', cost: 80, growth: 1.8, blurb: 'Bite stations on the subject. More staff on skin at once.', effect: (l) => `${3 + 3 * l} bite spots`, gain: '+3 bite spots', single: true, maxLevel: 5 },
-    refinery: { name: 'Refinery', short: 'Refinery', cost: 70, growth: 1.9, blurb: 'Refines stored blood so it keeps overnight. Raw blood clots by morning.', effect: (l) => `Refines ${(1.6 * l).toFixed(1)} mL/s`, gain: 'Stops clotting', place: true },
+    refinery: { name: 'Refinery', short: 'Refinery', cost: 70, growth: 1.9, blurb: 'Refines stored blood so it keeps overnight. Raw blood clots by morning.', effect: (l) => `Refines ${(1.6 * l).toFixed(1)} mL/s`, gain: 'Stops clotting', place: true, maxLevel: 6 },
     drip: { name: 'Drip line', short: 'Drip', cost: 110, growth: 1, blurb: 'A funnel at the bite, piped straight to storage. Staff unload right where they drink.', effect: () => 'Unloads at the bite', gain: 'Shortest trips', single: true, maxLevel: 1 },
     windbreak: { name: 'Windbreak', short: 'Windbreak', cost: 90, growth: 1, blurb: 'A cereal box, flattened, between the fan and the bite. Flights are back to normal.', effect: () => 'Cancels the fan', gain: 'Cancels the fan', single: true, maxLevel: 1 },
     masks: { name: 'Gas masks', short: 'Masks', cost: 140, growth: 1, blurb: 'Tiny masks for every employee. Bites are back to normal speed. Morale is complicated.', effect: () => 'Cancels the repellent', gain: 'Cancels the repellent', single: true, maxLevel: 1 },
     lookout: { name: 'Lookout', short: 'Lookout', cost: 60, growth: 2.5, blurb: 'Occupational Health & Safety. One employee in hi-vis on a perch above the bite, with a whistle. Calls swats, then files Form 7-B.', effect: (l) => l >= 2 ? 'Safety Officer · calls swats · 15 s of paperwork' : 'Calls swats · 24 s of paperwork', gain: 'Calls swats for you', upgradeGain: 'Faster paperwork', single: true, maxLevel: 2 },
     acquire: { name: 'Acquire the foot', short: 'Acquisition', cost: 5000, growth: 1, blurb: 'Lower Extremities: one ankle, sticking out from under the blanket. Slower bites, bigger loads, kicks instead of swats. Arrives with no staff and no infrastructure.', effect: () => 'A second division', gain: 'A second division', single: true, maxLevel: 1, acquire: 'foot' },
     plant: { name: 'Processing plant', short: 'Plant', cost: 200, growth: 2, blurb: 'A vertically integrated subsidiary at the acquired site: its own storage and its own refining. Staff there unload into it.', effect: (l) => `Holds ${200 * l} mL · refines ${(2 * l).toFixed(0)} mL/s`, gain: '+200 mL storage, +2 mL/s refining', upgradeGain: 'Expand the plant', single: true, maxLevel: 3, acquiredOnly: true },
+    lab: { name: 'Saliva R&D', short: 'R&D', cost: 900, growth: 1, blurb: 'A research lab under the bed. Mosquito saliva numbs the skin and thins the blood. We intend to monetise both.', effect: () => 'Unlocks research', gain: 'Opens research', single: true, maxLevel: 1 },
+    numbing: { name: 'Numbing agent', short: 'Numbing', cost: 600, growth: 2.4, blurb: 'R&D: a stronger anaesthetic in the saliva. He feels less of every bite, so the itch builds slower.', effect: (l) => `${Math.round((1 - C_RESEARCH.numbing.itch[l]) * 100)}% less itch`, gain: '15% less itch', upgradeGain: (l) => `${Math.round((1 - C_RESEARCH.numbing.itch[l + 1]) * 100)}% less itch`, single: true, maxLevel: 3, requires: 'lab' },
+    thinner: { name: 'Blood thinner', short: 'Thinner', cost: 500, growth: 2.4, blurb: 'R&D: an anticoagulant in the saliva. Blood flows faster, so every bite is quicker and fuller. The welts are bigger, so he notices more of them.', effect: (l) => `Bites ${Math.round((1 - C_RESEARCH.thinner.bite[l]) * 100)}% faster and ${Math.round((C_RESEARCH.thinner.load[l] - 1) * 100)}% fuller; welts ${Math.round((C_RESEARCH.thinner.notice[l] - 1) * 100)}% bigger`, gain: 'Faster, but noticed', upgradeGain: (l) => `Bites ${Math.round((1 - C_RESEARCH.thinner.bite[l + 1]) * 100)}% faster`, single: true, maxLevel: 3, requires: 'lab' },
     seminar: { name: 'Leadership Seminar', short: 'Seminar', cost: 120, growth: 2.2, blurb: 'A weekend retreat for this division\'s General Manager. Trust falls. Reading the room. Reading his sleep, mostly.', effect: (l) => l >= 2 ? 'GM reads his sleep 1.5 s late' : 'GM reads his sleep 4 s late', gain: 'Your GM reads his sleep faster', upgradeGain: 'Advanced course', single: true, maxLevel: 2 },
     floor: { name: 'Floor space', short: 'Floor', cost: 60, growth: 1, blurb: 'The window side of the room, unclaimed. Four more places to build.', effect: () => '+4 build spots', gain: '+4 build spots', single: true, maxLevel: 1, expand: true },
     hatchery: { name: 'Hatchery', short: 'Hatchery', cost: 70, growth: 1.7, blurb: 'Nurses raise new hires here. Each hire costs banked blood.', effect: (l) => `${2 * l} nurse stations`, gain: '+2 nurses' },
   };
   // the cards a player can see, in order; refinery and hatchery return with the day phase
-  const BUILD_ORDER = ['windbreak', 'masks', 'acquire', 'lookout', 'plant', 'seminar', 'tank', 'pool', 'refinery', 'rig', 'drip', 'floor'];
+  const BUILD_ORDER = ['windbreak', 'masks', 'acquire', 'lookout', 'lab', 'numbing', 'thinner', 'plant', 'seminar', 'tank', 'pool', 'refinery', 'rig', 'drip', 'floor'];
   // where Rhonda founded the company: a bottle cap under the bed, a short hop from the arm
   const NEST = [8.1, 3.3];
   // the floor opens in zones: the near floor first, the window side when it runs out (indices into PADS)
@@ -100,6 +103,18 @@
   // The arm is the original division; acquisitions add more. `site` is where the division starts the night
   // bite: bite time; load: mL per bite; itch: irritation per biter; minor/major: its hazards (the lookout calls the major one);
   // socks: times a night the site goes under the covers
+  // R&D: what each level of research does (index = level)
+  const C_RESEARCH = {
+    numbing: { itch: [1, 0.85, 0.72, 0.6] },
+    thinner: { bite: [1, 0.86, 0.75, 0.66], load: [1, 1.1, 1.2, 1.3], notice: [1, 1.12, 1.24, 1.36] },
+  };
+  // seniority: nights survived make a career. Each rank bites faster and carries more than the last
+  const CAREER = [
+    { name: 'Intern', at: 0, bite: 1, load: 1 },
+    { name: 'Associate', at: 2, bite: 0.9, load: 1.08 },
+    { name: 'Senior Associate', at: 5, bite: 0.8, load: 1.16 },
+    { name: 'Partner', at: 9, bite: 0.7, load: 1.25 },
+  ];
   const DIVISIONS = {
     arm: { name: 'Upper Extremities', short: 'Arm', site: 'arm', bite: 1, load: 1, itch: 1, minor: 'scratch', major: 'swat', socks: 0 },
     foot: { name: 'Lower Extremities', short: 'Foot', site: 'foot', bite: 1.35, load: 1.4, itch: 0.7, minor: 'rub', major: 'kick', socks: 3 },
@@ -193,6 +208,10 @@
     acquirePitch: 'The arm is running at capacity. The board (me) has identified an acquisition target: the left foot. He sleeps with it out of the blanket. So do 61% of men. We checked. — R.',
     acquired: (name) => `We have acquired ${name}. It comes with no staff, no infrastructure and one ankle. Synergies are expected. — R.`,
     gmAppointed: (name, div) => `${name} is now General Manager, ${div}. ${name.split(' ')[0]} no longer bites. ${name.split(' ')[0]} has meetings. — R.`,
+    labPitch: 'Proposal: an R&D department. Our saliva already numbs him and thins his blood. Imagine what it could do with funding. — R.',
+    labBuilt: 'R&D is open. Two lines of research: numbing agent (less itch) and blood thinner (faster bites, bigger welts). Pick your poison. Literally. — R.',
+    researched: (name, l) => `R&D: ${name}, phase ${l}. The lab coats were worth it. — R.`,
+    pale: ['He looks tired this morning. Productivity is up. — R.', 'He has gone a sort of beige. HR has asked us to stop calling him "the raisin". — R.', 'He is running on fumes. So are we, technically. Push on. — R.'],
     seminar: (div) => `The ${div} GM is back from the Leadership Seminar. Reads his sleep faster. Uses the word "bandwidth" now. — R.`,
     rollAcquired: 'He rolled onto the arm. Upper Extremities is dark for the night. Their staff are on loan to the foot. — R.',
     sock: 'The foot went under the covers. Lower Extremities is on an unscheduled break. — R.',
@@ -345,9 +364,13 @@
     ['Acquisitions', 'Once the arm is running at capacity, the board will offer you the foot. It is expensive. It starts with nothing. It kicks.'],
     ['Management', 'With two divisions, each gets a General Manager who runs it to policy while you are on the other floor. Tap the staff plate to change floors. Leadership seminars help GMs read his sleep. Scatter covers both.'],
     ['The lease', 'Fourteen nights per host, then the annual report and a new address. The company keeps everything. The new host has never heard of us.'],
+    ['Careers', 'Every night survived counts. Interns become Associates, then Senior Associates, then Partners. Each rank bites faster and carries more. Losing a Partner is a real loss.'],
+    ['R&D', 'From the fourth day: a lab, then two lines of research. Numbing agent means less itch. Blood thinner means faster, fuller bites, but he notices more of them.'],
+    ['His limit', 'He only has so much to give a night. Past it every bite brings up less. Watch him: he gets paler as the lease goes on.'],
+    ['Zoom', 'Pinch, scroll or press + and - to zoom.'],
     ['Mornings', 'The colony keeps. Every night starts where the last one ended.'],
   ];
 
-  MA.config = { PALETTE, FEEL, ECON, PACE, BUILDINGS, BUILD_ORDER, NEST, ZONES, PADS, SITES, DIVISIONS, DIVISION_ORDER, DIVISION_BUILDINGS, HAZARDS, POLICIES, SLEEPERS, HOST, FOUNDER, OPENING, NOTES, MORNING, FIRST, LAST, TRAITS, JOB_NAMES, MEMOS, RATINGS, RANKS, HANDBOOK, HANDBOOK_CORP };
+  MA.config = { RESEARCH: C_RESEARCH, CAREER, PALETTE, FEEL, ECON, PACE, BUILDINGS, BUILD_ORDER, NEST, ZONES, PADS, SITES, DIVISIONS, DIVISION_ORDER, DIVISION_BUILDINGS, HAZARDS, POLICIES, SLEEPERS, HOST, FOUNDER, OPENING, NOTES, MORNING, FIRST, LAST, TRAITS, JOB_NAMES, MEMOS, RATINGS, RANKS, HANDBOOK, HANDBOOK_CORP };
   if (typeof module !== 'undefined') module.exports = MA;
 })(typeof window !== 'undefined' ? window : globalThis);

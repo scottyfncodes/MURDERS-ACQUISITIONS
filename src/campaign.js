@@ -6,7 +6,7 @@
   const C = MA.config;
 
   const V1_KEY = 'murders-acquisitions.v1', V2_KEY = 'murders-acquisitions.v2';
-  const PLACEABLE = ['tank', 'pool', 'refinery'], SINGLES = ['rig', 'drip', 'windbreak', 'masks', 'lookout', 'seminar', 'plant'];
+  const PLACEABLE = ['tank', 'pool', 'refinery'], SINGLES = ['rig', 'drip', 'windbreak', 'masks', 'lookout', 'seminar', 'plant', 'lab', 'numbing', 'thinner'];
 
   function newCampaign() {
     return { night: 1, phase: 'night', divisions: ['arm'], gmPolicy: {}, host: { n: 1, start: 1 }, hostTotals: freshTotals(), booking: null, grace: 0, rehire: 0, leaseEnded: false, leases: [], bank: 0, refined: 0, zones: 1, suspicion: 0, counters: {}, newCounter: null, buildings: [], workers: [], lost: [], nextId: 1, hires: 0, unlocks: [], totals: { extracted: 0, nights: 0 }, history: [] };
@@ -127,11 +127,12 @@
   // what happened this morning, for the morning screen: attached to the campaign but never saved
   function withNews(camp, news) { Object.defineProperty(camp, 'news', { value: news, enumerable: false, configurable: true }); return camp; }
   // the night of the current host's lease (1..14)
+  function rankAt(served) { let r = 0; C.CAREER.forEach((k, i) => { if (served >= k.at) r = i; }); return r; }
   function leaseNight(camp) { return camp.night - camp.host.start + 1; }
   // dawn: a finished night becomes the next day. Unrefined blood clots (the first clot unlocks the refinery); he takes stock of
   // what he noticed; he may buy a countermeasure, book an exterminator, cancel one, or have the bedroom fumigated
   function dawn(camp, S, report) {
-    const n = snapshot(camp, S), ec = E(), news = { suspicion: null, fumigation: null, booking: null, cancelled: false, leaseEnded: false };
+    const n = snapshot(camp, S), ec = E(), news = { suspicion: null, fumigation: null, booking: null, cancelled: false, leaseEnded: false, promotions: [] };
     n.night = camp.night + 1; n.phase = 'day'; n.bank = Math.max(0, S.bank - report.clotted); n.refined = Math.min(n.bank, S.refined);
     if (report.clotted > 0 && !n.unlocks.includes('refinery')) n.unlocks.push('refinery');
     // suspicion: what he noticed last night, then he forgets some of it during the day (more, the more there is to forget)
@@ -154,6 +155,8 @@
     n.hostTotals = ht;
     n.totals = { extracted: camp.totals.extracted + report.extracted, nights: camp.totals.nights + 1 };
     n.history = [{ night: camp.night, extracted: report.extracted, staff: report.staff, lost: report.lost.length, hires: report.hires, clotted: report.clotted, suspicion: Math.round(sus) }].concat(camp.history);
+    // careers: whoever made it through the night has served one more; some of them are promoted
+    news.promotions = n.workers.map((w) => ({ name: w.name, from: rankAt(camp.night - w.since), to: rankAt(n.night - w.since) })).filter((p) => p.to > p.from).map((p) => ({ name: p.name, rank: C.CAREER[p.to].name }));
     // the lease: after the host's 14th night, the annual report
     if (leaseNight(camp) >= ec.leaseNights) { n.leaseEnded = true; news.leaseEnded = true; }
     return withNews(cleanCampaign(n), news);
@@ -210,6 +213,6 @@
     return out.slice(0, 3);
   }
 
-  MA.campaign = { V1_KEY, V2_KEY, newCampaign, defaults, fromSave, migrateV1, cleanCampaign, fold, dawn, relocate, fumigate, leaseNight, foldDay, nextCounter, plan, nightLength };
+  MA.campaign = { rankAt, V1_KEY, V2_KEY, newCampaign, defaults, fromSave, migrateV1, cleanCampaign, fold, dawn, relocate, fumigate, leaseNight, foldDay, nextCounter, plan, nightLength };
   if (typeof module !== 'undefined') module.exports = MA;
 })(typeof window !== 'undefined' ? window : globalThis);
