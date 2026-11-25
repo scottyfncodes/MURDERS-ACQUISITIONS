@@ -114,6 +114,16 @@
       $('cancel-place').addEventListener('click', () => { G.placing = null; audio.play('click'); renderPanel(); });
       return;
     }
+    // an executive post: who holds it, how well, and the next candidate (most senior first)
+    const post = typeof G.selected === 'string' ? { job: 'gm', div: G.selected.slice(3) } : (() => { const b = G.selected && S.buildings.find((x) => x.id === G.selected); return b && b.type === 'lookout' ? { job: 'lookout', div: sim.divOf(S, b).id } : null; })();
+    if (post && S.divisions[post.div]) {
+      const D = S.divisions[post.div], cur = S.workers.find((w) => w.job === post.job && sim.divOf(S, w) === D), list = sim.candidates(S, post.job, post.div), nxt = list.length ? list[(list.indexOf(cur) + 1) % list.length] : null;
+      const rk = (w) => C.CAREER[sim.rankOf(S, w)].name, how = post.job === 'gm' ? `reads his sleep ${sim.gmLag(S, D).toFixed(1)} s late` : `paperwork ${Math.round(C.ECON.lookoutReport[Math.min(sim.derived(S).divs[D.id].lookout, C.ECON.lookoutReport.length) - 1] * sim.execOf(S, D, 'lookout'))} s`;
+      p.innerHTML = `<div class="inspector" title="Veterans do the job better, and are missed on the skin."><span><b>${post.job === 'gm' ? 'General Manager' : 'Lookout'}${multi(S) ? ` · ${C.DIVISIONS[post.div].short}` : ''}</b><small>${cur ? `${cur.name}, ${rk(cur)} · ${how}` : 'Vacant'}</small></span><button type="button" class="up" id="appoint" ${nxt && nxt !== cur ? '' : 'disabled'}>${nxt && nxt !== cur ? `Appoint ${nxt.name.split(' ')[0]} (${rk(nxt)})` : 'No one else'}</button><button type="button" class="x" id="deselect" aria-label="Close">×</button></div>`;
+      $('appoint').addEventListener('click', () => { if (nxt) { sim.appoint(S, post.job, post.div, nxt.id); audio.play('click'); drainEvents(); saveDay(); renderPanel(); } });
+      $('deselect').addEventListener('click', () => { G.selected = null; audio.play('click'); renderPanel(); });
+      return;
+    }
     const sb = G.selected && S.buildings.find((x) => x.id === G.selected);
     if (sb) {
       const def = C.BUILDINGS[sb.type], cost = sim.upgradeCost(sb), extra = sb.type === 'tank' || sb.type === 'drip' ? ` · trip ${sim.tripSeconds(S, sb).toFixed(1)} s` : '';
@@ -147,13 +157,16 @@
     audio.play('click'); G.selected = null; G.placing = type; renderPanel();
   }
   function placeAt(pad) { const S = G.S, type = G.placing; if (!S || !type) return; G.placing = null; sim.build(S, type, pad); drainEvents(); renderPanel(); }
+  // last night's bottleneck, on the cards: what would have helped, and what would not
+  const CAPACITY = ['tank', 'refinery', 'pool', 'rig', 'drip', 'plant'], BOTTLENECK = { storage: ['tank', 'refinery', 'drip'], spots: ['rig'], staff: ['pool'], hazards: ['lookout'] };
   function updateCards() {
     const S = G.S, d = sim.derived(S);
     for (const type in cards) {
       const def = C.BUILDINGS[type], cost = sim.costOf(S, type, S.focus), el = cards[type], mine = def.single && S.buildings.find((b) => b.type === type && (!C.DIVISION_BUILDINGS.includes(type) || (b.div || 'arm') === S.focus));
       const own = def.single ? (mine ? `Lv ${mine.level}` : 'new') : d.counts[type] ? `×${d.counts[type]}` : 'new';
       const up = !def.single && !sim.freePads(S).length && cost !== Infinity, cheap = up ? sim.cheapestUpgrade(S, type) : null, price = cost === Infinity ? (def.single ? `Max · ${own}` : `Maxed · ${own}`) : up ? `${fmt(cost)} BU · ${own}` : `${fmt(cost)} BU · ${own}`;
-      const owned = !!mine, sub = up ? (cheap ? `Upgrade one to Lv ${cheap.level + 1}` : 'Upgrade one') : owned && cost === Infinity && def.requires ? def.effect(mine.level) : owned && def.upgradeGain ? (typeof def.upgradeGain === 'function' ? def.upgradeGain(mine.level) : def.upgradeGain) : def.gain; if (el._sub !== sub) { el._sub = sub; el.children[1].textContent = sub; }
+      const lim = save.campaign.constraint, hint = !lim ? null : lim === 'host' && CAPACITY.includes(type) ? 'Host is the limit' : (BOTTLENECK[lim] || []).includes(type) ? 'The bottleneck' : null;
+      const owned = !!mine, sub = hint && cost !== Infinity ? hint : up ? (cheap ? `Upgrade one to Lv ${cheap.level + 1}` : 'Upgrade one') : owned && cost === Infinity && def.requires ? def.effect(mine.level) : owned && def.upgradeGain ? (typeof def.upgradeGain === 'function' ? def.upgradeGain(mine.level) : def.upgradeGain) : def.gain; if (el._sub !== sub) { el._sub = sub; el.children[1].textContent = sub; el.classList.toggle('hinted', !!hint && sub === hint); el.classList.toggle('limit', sub === 'Host is the limit'); }
       if (el._price !== price) { el._price = price; el.children[2].textContent = price; }
       el.classList.toggle('can', cost <= S.bank);
     }
@@ -279,6 +292,9 @@
     const names = crew.map((w) => w.name), shown = names.slice(0, 6);
     $('r-staff-list').textContent = names.length > 6 ? `${shown.join(', ')} and ${names.length - 6} more.` : names.length > 1 ? `${shown.slice(0, -1).join(', ')} and ${shown[shown.length - 1]}.` : `${shown[0] || ''}.`;
     $('r-payroll').hidden = crew.length === 0;
+    { const m = news.morale; const show = m && (m.night < 62 || m.after < 62); $('r-morale').hidden = !show; if (show) $('r-morale').textContent = C.MORNING.morale(m.after, m.after - m.before); }
+    { const c = news.costs; $('r-costs').hidden = !c; if (c) $('r-costs').textContent = C.MORNING.costs(c); }
+    { const h = news.host; $('r-host').hidden = !h || r.night < 2; if (h) $('r-host-text').textContent = C.MORNING.hostLine(h, C.ECON.leaseNights - K.leaseNight(save.campaign) + 1); }
     const promo = (news.promotions || []).filter((p) => crew.some((w) => w.name === p.name)), pl = $('r-promo-list'); $('r-promo').hidden = !promo.length; pl.innerHTML = '';
     for (const p of promo.slice(0, 4)) { const l = document.createElement('li'); l.textContent = `${p.name} `; const sp = document.createElement('span'); sp.textContent = `→ ${p.rank}`; l.append(sp); pl.append(l); }
     if (promo.length > 4) { const l = document.createElement('li'); l.textContent = `and ${promo.length - 4} more.`; pl.append(l); }
@@ -454,6 +470,7 @@
         while (S.workers.length < 6) sim.hire(S, true); S.hires = Math.max(S.hires, 6); if (!S.unlocked.includes('scatter')) S.unlocked.push('scatter'); if (S.tut) { S.tut.step = 'free'; S.tut.scratched = true; }
         S.buildings.forEach((b) => (b.born = -9)); S.bank = 184; S.events.length = 0; S.stats.idleNoteAt = 1e9; G.memoQ = [{ text: C.NOTES.idle[0], tone: 'idle' }]; G.memoUntil = 0; G.cardsKey = '';
       },
+      select(what) { const S = G.S; if (!S) return; G.selected = what === 'lookout' ? (S.buildings.find((b) => b.type === 'lookout') || {}).id : what; G.cardsKey = ''; renderPanel(); },
       trigger(what, dv) { const S = G.S; if (!S || S.state !== 'playing') return; if (what === 'swat') { S.hev = null; S.eventCd = 1e9; for (let i = 0; i < 300 && !(i > 30 && S.biting >= 3); i++) { S.siteBlocked = 0; S.covered = 0; S.recallT = 0; S.irritation = Math.min(S.irritation, 20); sim.step(S, STEP); drainEvents(); } S.eventCd = 6; sim.startEvent(S, 'swat'); } else if (what === 'wake') sim.wake(S); else if (['scratch', 'roll', 'blanket', 'stir', 'rub', 'kick'].includes(what)) { const D = sim.div(S, dv); D.hev = null; sim.startEvent(S, what, null, D.id); } drainEvents(); },
     },
   };

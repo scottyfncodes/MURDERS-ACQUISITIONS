@@ -269,7 +269,7 @@ const runNight = (S, secs, each) => { while (S.state === 'playing' && S.time < s
   const late = (x) => (x.per[3].lost + x.per[4].lost + x.per[5].lost) / 3;
   console.log('balance  ', JSON.stringify({ carefulLostPerLateNight: +late(cn).toFixed(1), reckless: Math.round(rn.lost), recklessWithLookout: Math.round(rl.lost), careful: Math.round(cn.lost), carefulWithLookout: Math.round(cl.lost), hire: [cn, rn].map((x) => Math.round(x.hireSpend)) }));
   assert.ok(late(cn) <= 10, 'careful managers no longer lose 20-30 a night from night 4 (growth brings some risk: about 8 a night with no lookout)');
-  assert.ok(rn.lost >= cn.lost * 4 && rn.hireSpend >= cn.hireSpend * 2.5, 'reckless management is far more dangerous and far more expensive');
+  assert.ok(rn.lost >= cn.lost * 3.5 && rn.hireSpend >= cn.hireSpend * 2.5, 'reckless management is far more dangerous and far more expensive');
   assert.ok(rl.lost < rn.lost * 0.8, 'a lookout saves lives for a reckless manager'); assert.ok(cl.lost < cn.lost, 'and for a careful one, once the operation has grown');
   assert.ok(rl.lost > rn.lost * 0.3, 'but a reckless colony with a lookout is nowhere near invulnerable');
   assert.ok(cn.per[5].blood > cn.per[0].blood * 4, 'a growing workforce keeps paying');

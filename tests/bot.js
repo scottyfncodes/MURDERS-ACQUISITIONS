@@ -29,7 +29,8 @@ function play(camp, opts) {
       else if (f.st === 'toSkin') S.hold = true; else { S.hold = false; rest = 0; }
       if (opts.handsOff && S.workers.length >= 2) S.hold = false;
       if (S.unlocked.includes('push') && opts.push) {
-        const want = opts.push === 'always' || (opts.push === 'timed' && S.depth > 0.55);
+        // a careful manager also eases off once he runs dry (leave him something for tomorrow)
+        const want = (opts.push === 'always' || (opts.push === 'timed' && S.depth > 0.55)) && !(opts.dryEase && sim.yieldOf(S) < 1);
         // a person manages one floor at a time and can act about once every 1.2 s; the floor they leave goes back to its GM
         for (const D of sim.divs(S)) {
           if (D.offline || (D.id !== S.focus && !opts.handsOn) || S.time < nextAct) continue;
@@ -37,6 +38,7 @@ function play(camp, opts) {
         }
       }
     }
+    if (opts.maxStaff) sim.setHiring(S, S.workers.length < opts.maxStaff); // a lean workforce: HR stops at a headcount
     sim.step(S, DT); if (opts.drain) { S.bank = 0; S.refined = 0; } if (opts.tick) opts.tick(S);
     for (const e of S.events) {
       if (opts.onEvent) opts.onEvent(e, S);
@@ -84,7 +86,8 @@ function day(camp, n, policy) {
   }
   if (policy.lookout) { buy('lookout'); if (last.deadOnReport && D.buildings.some((b) => b.type === 'lookout' && b.level < 2)) buy('lookout'); }
   if (!D.buildings.some((b) => b.type === 'refinery') || last.clotted > 60) buy('refinery');
-  for (let i = 0; i < 6; i++) { const want = last.storageFullSec > 4 ? (i % 2 ? 'refinery' : 'tank') : last.hrCapped ? 'rig' : 'pool'; if (!buy(want) && !buy('rig') && !buy('tank') && !buy('floor')) break; }
+  // a manager who reads the morning report does not buy capacity when the host was the bottleneck
+  if (camp.constraint !== 'host') for (let i = 0; i < 6; i++) { let want = last.storageFullSec > 4 ? (i % 2 ? 'refinery' : 'tank') : last.hrCapped ? 'rig' : 'pool'; if (want === 'pool' && policy.maxStaff && sim.derived(D).housing >= policy.maxStaff) want = 'refinery'; if (!buy(want) && !buy('rig') && !buy('tank') && !buy('floor')) break; }
   // R&D: the lab, then one phase of research a day, in the strategy's order
   if (policy.research) { buy('lab'); for (const t of policy.research) if (buy(t)) break; }
   const out = K.foldDay(camp, D, true); out.daySpent = D.spent; return out;
@@ -94,10 +97,12 @@ function campaign(opts) {
   const prof = PROFILES[opts.profile], log = []; let camp = K.newCampaign();
   for (let n = 1; n <= opts.nights; n++) {
     if (camp.leaseEnded) camp = Object.assign(K.relocate(camp), { lastReport: camp.lastReport });
-    let daySpent = 0; if (camp.phase === 'day') { camp = Object.assign(day(camp, n, opts), { lastReport: camp.lastReport }); daySpent = camp.daySpent || 0; }
-    const lie = opts.lieLow && camp.booking !== null, startStaff = camp.workers.length, x = play(camp, { seed: opts.seed * 100 + n, push: lie ? 'never' : prof.push, handsOn: opts.handsOn, attention: prof.attention, handsOff: n > 1, buildOrder: ['windbreak', 'masks'].concat(opts.lookout ? ['lookout'] : [], ['tank', 'pool', 'refinery', 'rig', 'drip', 'floor']) });
+    // harvest: a manager who conserves the host all lease and drains him on its last nights (he is leaving anyway)
+    const harvest = opts.harvestFrom && K.leaseNight(camp) >= opts.harvestFrom, o = harvest ? Object.assign({}, opts, { gm: 'aggressive', dryEase: false, push: 'always' }) : opts;
+    let daySpent = 0; if (camp.phase === 'day') { camp = Object.assign(day(camp, n, o), { lastReport: camp.lastReport }); daySpent = camp.daySpent || 0; }
+    const lie = opts.lieLow && camp.booking !== null, startStaff = camp.workers.length, x = play(camp, { seed: opts.seed * 100 + n, dryEase: o.dryEase, maxStaff: opts.maxStaff, push: lie ? 'never' : o.push || prof.push, handsOn: opts.handsOn, attention: prof.attention, handsOff: n > 1, buildOrder: ['windbreak', 'masks'].concat(opts.lookout ? ['lookout'] : [], camp.constraint === 'host' ? [] : ['tank', 'pool', 'refinery', 'rig', 'drip', 'floor']) });
     const sus0 = camp.suspicion, booked = camp.booking; camp = Object.assign(K.fold(camp, x.S, x.r), { lastReport: x.r }); const news = camp.news || {};
-    log.push({ night: n, blood: x.r.extracted, lost: x.r.lost.length, staffStart: startStaff, staffEnd: x.r.staff, hireSpend: x.r.hireSpend, suspicion: Math.round(Math.min(100, sus0 + x.r.suspicion)), hits: x.r.hits, calls: x.r.calls, lookoutCalls: x.r.lookoutCalls, offArm: x.r.offArmSec, storageFull: x.r.storageFullSec, lookout: x.r.lookout, divisions: x.S.divOrder.length, actions: x.log.actions, booked: news.booking ? 1 : 0, fumigated: news.fumigation ? news.fumigation.lost.length : -1, cancelled: news.cancelled ? 1 : 0, hostNight: K.leaseNight(Object.assign({}, camp, { night: n })) , host: camp.host.n, susAfter: Math.round(camp.suspicion), spent: Math.round(x.S.spent + daySpent), report: x.r });
+    log.push({ night: n, blood: x.r.extracted, lost: x.r.lost.length, staffStart: startStaff, staffEnd: x.r.staff, hireSpend: x.r.hireSpend, suspicion: Math.round(Math.min(100, sus0 + x.r.suspicion)), hits: x.r.hits, calls: x.r.calls, lookoutCalls: x.r.lookoutCalls, offArm: x.r.offArmSec, storageFull: x.r.storageFullSec, lookout: x.r.lookout, divisions: x.S.divOrder.length, actions: x.log.actions, booked: news.booking ? 1 : 0, fumigated: news.fumigation ? news.fumigation.lost.length : -1, cancelled: news.cancelled ? 1 : 0, hostNight: K.leaseNight(Object.assign({}, camp, { night: n })) , host: camp.host.n, susAfter: Math.round(camp.suspicion), spent: Math.round(x.S.spent + daySpent), report: x.r, bank: Math.round(camp.bank), opCost: news.costs ? news.costs.total : 0, vigor: camp.host.vigor === undefined ? 1 : camp.host.vigor, deadRanks: x.r.lost.map((l) => l.rank || 0), fumRanks: news.fumigation ? news.fumigation.lost.map((l) => l.rank || 0) : [], staffRanks: x.S.workers.map((w) => sim.rankOf(x.S, w)) });
   }
   return { camp, log };
 }

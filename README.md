@@ -55,6 +55,18 @@ There is no build step and there are no dependencies.
   He has a comfortable nightly limit (8,000 BU, half as much again with the foot); past it each bite brings up less,
   down to a trickle. The new host after a relocation arrives full.
 - **Camera**: close on the floor you are on. Pinch, scroll or +/- to zoom; all the way out shows the whole room.
+- **His condition** carries from night to night. What the crew takes drains him (taking him dry drains him far faster);
+  a day off restores some. Tonight's comfortable supply follows his condition, and the morning report shows both.
+  **Ease off** once he runs dry and the crew leaves him something for tomorrow; **push** to take it all. A pale host
+  also asks questions (it adds to suspicion). On the lease's last night there is no tomorrow to save him for.
+- **Operating costs** are paid every dawn from the second: payroll by rank (interns get a stipend; partners do not) and
+  upkeep on every building level. The morning report names last night's **bottleneck** (the host, storage, bite spots,
+  headcount, interruptions), and the build cards say which purchase would help and which would not.
+- **Executives**: tap the lookout's perch or a GM's podium to appoint someone. A veteran does the job better (shorter
+  paperwork, a quicker read of his sleep) but is one less veteran on the skin. Veterans flinch clear of a hand more
+  often; when a Senior Associate or Partner dies, Rhonda writes a memo and morale (which now carries over) drops.
+- **Fumigation** is a "workforce restructuring" chosen by an external consultant: any rank can go. The room then airs out
+  for three nights (the crew is kept off him for part of each night, and less of him is exposed), and morale drops.
 - The colony, its staff and its stored blood carry over from night to night.
 - B holds the bite on a keyboard; P pauses, M mutes.
 
@@ -73,6 +85,7 @@ There is no build step and there are no dependencies.
 | `tests/bot.js` | The test players (a human-paced night bot and a campaign runner) |
 | `tests/acquisitions.test.js` | The foot, GMs and policies, the plant, the roll, suspicion, the exterminator, the lease: `node tests/acquisitions.test.js` |
 | `tests/depth.test.js` | Careers, Saliva R&D, the host running dry and deflating: `node tests/depth.test.js` |
+| `tests/economy.js` | Economy audit: five strategies (plus a final-night harvest) over a lease: net BU after every cost, late-lease decisions, veterans, fumigation, suspicion saturation. `node tests/economy.js [seeds] [label]`; `NIGHTS=28` for two leases |
 | `tests/strategies.js` | Strategy simulations over a lease (never acquire, untrained/trained/aggressive GMs, lying low, hands-on, reckless): `node tests/strategies.js [nights] [seeds]` |
 | `tests/regression.js` | Golden regression against `tests/golden/baseline.json` (`--write` re-records it after an intentional balance change); `tests/golden/pr6-saves.json` holds saves written before divisions existed, checked by `sim.test.js` |
 | `art-direction/` | The approved look and the shot list |

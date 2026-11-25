@@ -37,6 +37,7 @@
       if (e.founder) label(`+${Math.round(e.ml)} BU`, pal.primary, [e.at[0], e.at[1], e.at[2] + 0.6], 1.1);
       else if (e.first) { label('AUTOMATED', pal.primary, [e.at[0], e.at[1], e.at[2] + 1.0], 2.4, true); fx.flare = Math.max(fx.flare, 0.6); }
     }
+    else if (e.type === 'vetLost') label(`${e.name.split(' ')[0].toUpperCase()}, ${C.CAREER[e.rank].name.toUpperCase()}`, pal.accent, [e.at[0], e.at[1], e.at[2] + 1.2], 3.2, true);
     else if (e.type === 'impact') {
       if (e.kind === 'swat' || e.kind === 'scratch') {
         if (!fx.reduced) { fx.shake = e.kind === 'swat' ? FEEL.shake_px : FEEL.shake_px * 0.4; if (e.kind === 'swat') fx.flash = 1; }
@@ -106,8 +107,8 @@
 
     const cine = opt.cine ? opt.cine.t : null, phoneLit = cine === null ? 0 : clamp((6.2 - cine) / 1.6, 0, 1);
     const away = S.phase === 'day', waking = S.state === 'waking' || S.state === 'over', wk = waking ? clamp(S.wakeT / 3, 0, 1) : 0;
-    // he deflates: paler and flatter the more of him has been taken, over the night and over the lease
-    const drained = S.leaseDrawn !== undefined && MA.sim.drainOf ? clamp(0.75 * MA.sim.drainOf(S, (S.leaseDrawn || 0) + (S.taken || 0)) + 0.25 * (S.taken || 0) / Math.max(1, S.supply || 1), 0, 1) : 0;
+    // he deflates: paler and flatter as his condition falls (it carries between nights) and as tonight's blood comes out
+    const drained = S.phase === 'day' ? 0 : clamp(0.8 * (1 - (Number.isFinite(S.vigor) ? S.vigor : 1)) + 0.35 * (S.taken || 0) / Math.max(1, S.baseSupply || S.supply || 1), 0, 1);
     const flesh = mixHex(pal.skin, '#c3c2b2', Math.min(1, drained * 1.1)), flat = 1 - 0.78 * drained, thin = 1 - 0.3 * drained;
     const breath = fx.reduced ? 0 : Math.sin(t * Math.PI / 2) * 0.05;
     const stirring = S.hev && (S.hev.kind === 'roll' || S.hev.kind === 'stir') ? Math.sin(S.hev.t * 9) * 0.08 : 0;
@@ -192,6 +193,7 @@
       else { ell([hd[0] + hr * 0.38, hd[1] + hr * 0.1], hr * 0.12, hr * 0.07, shade(flesh, 0.35)); ell([hd[0] - hr * 0.1, hd[1] + hr * 0.28], hr * 0.12, hr * 0.07, shade(flesh, 0.35)); ctx.beginPath(); ctx.moveTo(hd[0] + hr * 0.2, hd[1] + hr * 0.62); ctx.lineTo(hd[0] + hr * 0.5, hd[1] + hr * 0.5); ctx.stroke(); ctx.fillStyle = shade(flesh, 0.72); ctx.beginPath(); ctx.ellipse(hd[0] + hr * 0.4, hd[1] + hr * 0.28, hr * 0.2, hr * 0.07, -0.4, 0, 7); ctx.fill(); }
       if (!waking) { ctx.fillStyle = pal.zzz; ctx.textAlign = 'center'; [[0.9, 1.5, 0.5], [1.6, 2.4, 0.72], [2.5, 3.5, 1]].forEach(([dx, dz, k], i) => { const b = fx.reduced ? 0 : Math.sin(t * 1.6 + i) * s * 0.08; ctx.font = `${s * 0.72 * k}px ${FONT_D}`; ctx.globalAlpha = (0.5 + k * 0.5) * (S.irritation > 70 ? 0.45 : 1) * (cine === null ? 1 : clamp((cine - 5) / 1.5, 0, 1)) * (S.rhythm ? 0.25 + 0.75 * S.depth : 1); ctx.fillText('Z', hd[0] + dx * s * 0.8, hd[1] - dz * s * 0.62 + b); }); ctx.globalAlpha = 1; }
     }
+    if (S.fumesUntil > S.time && !gone) { ctx.save(); ctx.globalAlpha = 0.18 * clamp((S.fumesUntil - S.time) / 8, 0.3, 1); ctx.fillStyle = '#8fd18a'; ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height); ctx.restore(); const h = P(6, 3.5, 7.4); tag(h[0], h[1], `AIRING OUT · ${Math.ceil(S.fumesUntil - S.time)} s`, '#8fd18a'); }
     if (S.rhythm && !gone && !waking && S.state === 'playing' && S.depth < 0.35) { const h = P(2.75, 3.5, 6.9); tag(h[0], h[1] - s * 0.4, 'LIGHT SLEEP', Math.sin(t * 6) > 0 ? pal.accent : pal.primary); }
     // limbs: the arm off the near side, the foot off the far end after a roll
     const armOut = waking || away ? 0 : S.armOut, footOut = waking || away ? 0 : S.footOut;
@@ -435,6 +437,8 @@
   function pick(v, S, px, py) {
     let best = null, bd = Math.max(30, v.s * 2.2);
     for (const b of S.buildings) { if (b.type === 'nest' || b.type === 'windbreak' || b.type === 'masks') continue; const c = b.type === 'seminar' ? null : b.type === 'lookout' ? MA.sim.lookoutPoint(S, MA.sim.divOf(S, b)) : b.type === 'plant' ? MA.sim.storePoint(b, S) : b.type === 'rig' ? [SITES[MA.sim.divOf(S, b).site].rig[0] + 0.6, SITES[MA.sim.divOf(S, b).site].rig[1] + 0.5] : b.type === 'drip' ? MA.sim.storePoint(b, S) : MA.sim.padCenter(b); if (!c) continue; const p = project(v, c[0], c[1], 0.9); const dd = Math.hypot(p[0] - px, p[1] - py); if (dd < bd) { bd = dd; best = b; } }
+    // General Managers on their podiums
+    for (const w of S.workers.filter((x) => x.job === 'gm')) { const D = MA.sim.divOf(S, w), c = MA.sim.gmPoint(S, D), p = project(v, c[0], c[1], c[2] - 0.3), dd = Math.hypot(p[0] - px, p[1] - py); if (dd < bd) { bd = dd; best = { id: `gm@${D.id}`, type: 'gm', div: D.id }; } }
     return best;
   }
 

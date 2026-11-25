@@ -41,12 +41,18 @@
     // suspicion: what he notices. Bites add a little (with diminishing returns), disturbances more, and a squashed employee most; he forgets some each day
     suspicionPerSqrtLoad: 0.6, suspicionScratch: 2, suspicionSwat: 4, suspicionStir: 10, suspicionPerLoss: 3, suspicionDailyForget: 20,
     // he forgets some of it each day: a fixed amount plus a share of what there is (so suspicion settles instead of only climbing)
-    suspicionForgetBase: 10, suspicionForgetShare: 0.28,
+    suspicionForgetBase: 14, suspicionForgetShare: 0.3,
     // the exterminator: booked when he reaches 100%, comes after this many nights unless that morning's suspicion is below cancelBelow
     bookAt: 100, warningNights: 3, cancelBelow: 80,
     // fumigation ("restructuring"): share of non-executive staff lost, suspicion afterwards, nights before he can book again,
     // nights of discounted rehiring and the discount
-    fumigationStaffShare: 0.4, fumigatedSuspicion: 40, fumigationGrace: 3, rehireNights: 2, rehireDiscount: 0.5,
+    fumigationStaffShare: 0.3, fumigatedSuspicion: 40, fumigationGrace: 3, rehireNights: 2, rehireDiscount: 0.5,
+    // after a fumigation the room has to air out: for three nights the crew cannot reach him for the first half, third and fifth
+    // of the night (residueFumes, by nights left); he sleeps with the window open and under two duvets, so less of him is
+    // exposed (residueSupply); and morale takes a hit
+    residueNights: 3, residueFumes: [0.15, 0.25, 0.4], residueSupply: [0.85, 0.75, 0.6], fumigationMorale: 15,
+    // a pale host asks questions: each morning below this condition adds suspicion
+    paleFrom: 0.85, paleSuspicion: 30,
     // the host lifecycle: nights per lease
     leaseNights: 14,
     // countermeasures, in the order he buys them, and the suspicion that sets each one off
@@ -57,7 +63,15 @@
     // the lookout: how fast they call a swat, and the paperwork after every call (Form 7-B), by level. Swats only: scratches stay the player's
     lookoutReaction: 0.45, lookoutReport: [24, 15],
     // acquisitions: the foot is offered once the arm's rig reaches this level
-    acquireAtRig: 4, labFromNight: 4, drainNights: 8, premiumFrom: 3, premiumGrowth: 1.6, acquiredSupply: 0.5, dryFrom: 0.7, drySlope: 1.5, dryFloor: 0.15, dryCap: 1.6,
+    acquireAtRig: 4, labFromNight: 4, drainNights: 8, premiumFrom: 3, premiumGrowth: 1.6, acquiredSupply: 0.5, dryFrom: 1.0, drySlope: 1.5, dryFloor: 0.15, dryCap: 1.6,
+    // the host's condition (vigor, 0-1) carries from night to night within a lease. His comfortable supply tonight scales
+    // with it; what is taken drains it, more than proportionally (vigorDrain x share squared), and dry bites, past his
+    // comfortable supply, drain it far faster; a day off restores half of what he is missing
+    twitchFrom: 10, twitchRate: 0.035,
+    // operating costs, paid every dawn from the second: each employee's pay is set by rank (CAREER: interns get a stipend);
+    // every building level has upkeep
+    upkeep: { tank: 3, refinery: 8, pool: 4, rig: 6, drip: 5, plant: 8, lookout: 5, lab: 25 },
+    vigorSupplyFloor: 0.35, vigorRegen: 0.5, vigorDrain: 0.3, vigorDryDrain: 0.8, vigorMin: 0.12, dryNotice: 1.5,
     // the acquired site's processing plant, per level
     plantCap: 200, plantRefine: 2,
     // General Managers read his sleep this many seconds late (untrained, after one seminar, after two), and push above this depth
@@ -83,7 +97,7 @@
     acquire: { name: 'Acquire the foot', short: 'Acquisition', cost: 5000, growth: 1, blurb: 'Lower Extremities: one ankle, sticking out from under the blanket. Slower bites, bigger loads, kicks instead of swats. Arrives with no staff and no infrastructure.', effect: () => 'A second division', gain: 'A second division', single: true, maxLevel: 1, acquire: 'foot' },
     plant: { name: 'Processing plant', short: 'Plant', cost: 200, growth: 2, blurb: 'A vertically integrated subsidiary at the acquired site: its own storage and its own refining. Staff there unload into it.', effect: (l) => `Holds ${200 * l} BU · refines ${(2 * l).toFixed(0)} BU/s`, gain: '+200 BU storage, +2 BU/s refining', upgradeGain: 'Expand the plant', single: true, maxLevel: 3, acquiredOnly: true },
     lab: { name: 'Saliva R&D', short: 'R&D', cost: 900, growth: 1, blurb: 'A research lab under the bed. Mosquito saliva numbs the skin and thins the blood. We intend to monetise both.', effect: () => 'Unlocks research', gain: 'Opens research', single: true, maxLevel: 1 },
-    numbing: { name: 'Numbing agent', short: 'Numbing', cost: 600, growth: 2.4, blurb: 'R&D: a stronger anaesthetic in the saliva. He feels less of every bite, so the itch builds slower.', effect: (l) => `${Math.round((1 - C_RESEARCH.numbing.itch[l]) * 100)}% less itch`, gain: '15% less itch', upgradeGain: (l) => `${Math.round((1 - C_RESEARCH.numbing.itch[l + 1]) * 100)}% less itch`, single: true, maxLevel: 3, requires: 'lab' },
+    numbing: { name: 'Numbing agent', short: 'Numbing', cost: 600, growth: 2.4, blurb: 'R&D: a stronger anaesthetic in the saliva. He feels less of every bite, so the itch builds slower. It works on a sleeping nerve: in light sleep he still feels most of it.', effect: (l) => `${Math.round((1 - C_RESEARCH.numbing.itch[l]) * 100)}% less itch`, gain: '15% less itch', upgradeGain: (l) => `${Math.round((1 - C_RESEARCH.numbing.itch[l + 1]) * 100)}% less itch`, single: true, maxLevel: 3, requires: 'lab' },
     thinner: { name: 'Blood thinner', short: 'Thinner', cost: 500, growth: 2.4, blurb: 'R&D: an anticoagulant in the saliva. Blood flows faster, so every bite is quicker and fuller. The welts are bigger, so he notices more of them.', effect: (l) => `Bites ${Math.round((1 - C_RESEARCH.thinner.bite[l]) * 100)}% faster and ${Math.round((C_RESEARCH.thinner.load[l] - 1) * 100)}% fuller; welts ${Math.round((C_RESEARCH.thinner.notice[l] - 1) * 100)}% bigger`, gain: 'Faster, but noticed', upgradeGain: (l) => `Bites ${Math.round((1 - C_RESEARCH.thinner.bite[l + 1]) * 100)}% faster`, single: true, maxLevel: 3, requires: 'lab' },
     seminar: { name: 'Leadership Seminar', short: 'Seminar', cost: 120, growth: 2.2, blurb: 'A weekend retreat for this division\'s General Manager. Trust falls. Reading the room. Reading his sleep, mostly.', effect: (l) => l >= 2 ? 'GM reads his sleep 1.5 s late' : 'GM reads his sleep 4 s late', gain: 'Your GM reads his sleep faster', upgradeGain: 'Advanced course', single: true, maxLevel: 2 },
     floor: { name: 'Floor space', short: 'Floor', cost: 60, growth: 1, blurb: 'The window side of the room, unclaimed. Four more places to build.', effect: () => '+4 build spots', gain: '+4 build spots', single: true, maxLevel: 1, expand: true },
@@ -105,15 +119,17 @@
   // socks: times a night the site goes under the covers
   // R&D: what each level of research does (index = level)
   const C_RESEARCH = {
-    numbing: { itch: [1, 0.85, 0.72, 0.6] },
+    numbing: { itch: [1, 0.92, 0.87, 0.82] },
     thinner: { bite: [1, 0.86, 0.75, 0.66], load: [1, 1.1, 1.2, 1.3], notice: [1, 1.12, 1.24, 1.36] },
   };
-  // seniority: nights survived make a career. Each rank bites faster and carries more than the last
+  // seniority: nights survived make a career. Each rank bites faster and carries more than the last, earns more, is likelier to
+  // flinch clear of a hand (dodge), does an executive job (lookout, GM) better (exec: paperwork and reading lag), and is
+  // mourned (grief: morale lost when they die)
   const CAREER = [
-    { name: 'Intern', at: 0, bite: 1, load: 1 },
-    { name: 'Associate', at: 2, bite: 0.9, load: 1.08 },
-    { name: 'Senior Associate', at: 5, bite: 0.8, load: 1.16 },
-    { name: 'Partner', at: 9, bite: 0.7, load: 1.25 },
+    { name: 'Intern', at: 0, bite: 1, load: 1, pay: 20, dodge: 0, exec: 1, grief: 0 },
+    { name: 'Associate', at: 2, bite: 0.9, load: 1.08, pay: 38, dodge: 0.2, exec: 0.88, grief: 0 },
+    { name: 'Senior Associate', at: 5, bite: 0.8, load: 1.16, pay: 48, dodge: 0.4, exec: 0.76, grief: 8 },
+    { name: 'Partner', at: 9, bite: 0.7, load: 1.25, pay: 58, dodge: 0.6, exec: 0.64, grief: 14 },
   ];
   const DIVISIONS = {
     arm: { name: 'Upper Extremities', short: 'Arm', site: 'arm', bite: 1, load: 1, itch: 1, minor: 'scratch', major: 'swat', socks: 0 },
@@ -211,6 +227,11 @@
     labPitch: 'Proposal: an R&D department. Our saliva already numbs him and thins his blood. Imagine what it could do with funding. — R.',
     labBuilt: 'R&D is open. Two lines of research: numbing agent (less itch) and blood thinner (faster bites, bigger welts). Pick your poison. Literally. — R.',
     researched: (name, l) => `R&D: ${name}, phase ${l}. The lab coats were worth it. — R.`,
+    dry: 'He is running dry. Ease off and the crew leaves him something for tomorrow. Push, and we take it all. — R.',
+    vigor: (pct) => `Host condition ${pct}%. He looks like he gave blood. He did, technically. — R.`,
+    vetLost: (name, rank, nights, cause) => `${name} (${rank}, ${nights} night${nights === 1 ? '' : 's'} with the company) was ${{ swat: 'swatted', scratch: 'scratched off', rub: 'rubbed out', kick: 'kicked' }[cause] || 'lost'} tonight. Their desk has been reassigned. A moment of silence was observed (four seconds). — R.`,
+    dodged: (name, rank) => `${name} (${rank}) saw the hand coming. Experience is the only benefit we cannot cut. — R.`,
+    appointed: (name, rank, job) => `${name} (${rank}) is our new ${job === 'gm' ? 'General Manager' : 'lookout'}. ${rank === 'Intern' ? 'An intern in management. Bold.' : 'One less biter on the skin.'} — R.`,
     pale: ['He looks tired this morning. Productivity is up. — R.', 'He has gone a sort of beige. HR has asked us to stop calling him "the raisin". — R.', 'He is running on fumes. So are we, technically. Push on. — R.'],
     seminar: (div) => `The ${div} GM is back from the Leadership Seminar. Reads his sleep faster. Uses the word "bandwidth" now. — R.`,
     rollAcquired: 'He rolled onto the arm. Upper Extremities is dark for the night. Their staff are on loan to the foot. — R.',
@@ -257,22 +278,30 @@
       if (r.fanLoss) out.push({ ml: r.fanLoss, text: 'The fan slowed every flight.', fix: 'A windbreak cancels it.' });
       if (r.repellentLoss) out.push({ ml: r.repellentLoss, text: 'The repellent slowed every bite.', fix: 'Gas masks cancel it.' });
       if (r.hrCapped && !out.length) out.push({ ml: 0, text: `HR stopped hiring at ${r.crewCap}: the arm only has ${r.slots} spots.`, fix: 'An extraction rig, not a pool.' });
+      // when he had nothing more to give, storage and queues were not what held us back, whatever the stopwatch says
+      if (r.constraint === 'host') { for (let i = out.length - 1; i >= 0; i--) if (/^(Storage was full|Staff queued)/.test(out[i].text)) out.splice(i, 1); out.unshift({ ml: 1e9, text: `The host. He gave ${r.host.taken.toLocaleString('en-US')} BU against the ${r.host.supply.toLocaleString('en-US')} he could comfortably spare.`, fix: 'More tanks, rigs or staff will not help: they only add upkeep and payroll. Let him recover, or drain him and pay for it tomorrow.' }); }
       out.sort((a, b) => b.ml - a.ml);
       return out.slice(0, 3);
     },
     heldNone: 'Nothing held us back. Corporate will find something. — R.',
     // the suspicion breakdown: one line per source, then what he forgets, then where it stands
-    susLabel: (p) => ({ bites: `Bites at the ${p.div === 'foot' ? 'foot' : 'arm'} (${p.count})`, scratch: `Scratches (${p.count})`, swat: `Swats (${p.count})`, rub: `Rubs (${p.count})`, kick: `Kicks (${p.count})`, stir: `He woke up (${p.count})`, lost: `Bodies found (${p.count})` }[p.key] || p.key),
+    susLabel: (p) => ({ pale: `He feels drained (condition ${p.count}%)`, bites: `Bites at the ${p.div === 'foot' ? 'foot' : 'arm'} (${p.count})`, scratch: `Scratches (${p.count})`, swat: `Swats (${p.count})`, rub: `Rubs (${p.count})`, kick: `Kicks (${p.count})`, stir: `He woke up (${p.count})`, lost: `Bodies found (${p.count})` }[p.key] || p.key),
     susForget: 'He forgets some of it today',
     susStatus: (n) => n.booking ? `He has booked an exterminator. It comes in ${n.nightsLeft} night${n.nightsLeft === 1 ? '' : 's'} unless his suspicion is under ${n.cancelBelow}% that morning. Ease off; lie low.` : n.next ? `At ${n.next.at}% he buys something. At 100% he calls an exterminator.` : 'At 100% he calls an exterminator.',
     booked: 'He googled "mosquitoes bedroom". Then "how many mosquitoes is too many". Then "exterminator near me". — R.',
     cancelled: 'He cancelled the exterminator. Something came up. We will not be finding out what. — R.',
-    restructure: (f) => `${f.lost.length} colleague${f.lost.length === 1 ? ' was' : 's were'} let go, most recent hires first${f.byDiv.length > 1 ? ` (${f.byDiv.map((d) => `${d.lost} from ${d.id === 'foot' ? 'Lower' : 'Upper'} Extremities`).join(', ')})` : ''}. Raw inventory written off: ${f.raw} BU. ${f.pools ? `${f.pools} pool${f.pools === 1 ? '' : 's'} downsized. ` : ''}Executive leadership (${f.executives + 1}) was in a meeting and is unharmed.`,
+    restructure: (f) => `${f.lost.length} colleague${f.lost.length === 1 ? ' was' : 's were'} let go, selected by an external consultant${f.seniors ? `, ${f.seniors} of them senior staff` : ''}${f.byDiv.length > 1 ? ` (${f.byDiv.map((d) => `${d.lost} from ${d.id === 'foot' ? 'Lower' : 'Upper'} Extremities`).join(', ')})` : ''}. Raw inventory written off: ${f.raw} BU. ${f.pools ? `${f.pools} pool${f.pools === 1 ? '' : 's'} downsized. ` : ''}Executive leadership (${f.executives + 1}) was in a meeting and is unharmed. Seniority was not a factor. Neither was merit.`,
     fumigatedNote: 'He had someone in at nine. Leadership was offsite. — R.',
+    morale: (m, d) => `Morale ${m}%${d ? ` (${d > 0 ? '+' : ''}${d})` : ''}. ${m < 45 ? 'The staff are slower. Pizza has been discussed.' : m < 60 ? 'Productivity is following it down.' : 'Productivity is fine.'}`,
+    residue: (n) => `The bedroom is still airing out from the exterminator. Nobody goes near him until it clears (${n === 3 ? 'two fifths' : n === 2 ? 'a quarter' : 'a sixth'} of the night), and he is sleeping under two duvets with the window open: ${n === 3 ? '40' : n === 2 ? '25' : '15'}% less of him to work with. Masks do not help. We asked. — R.`,
     restructureHead: 'A leaner, more agile organisation.',
     restructureNote: 'This was a difficult decision for leadership. Rehiring is half price for two nights. Thoughts and prayers have been issued. Targets are unchanged. — R.',
     divisionLine: (d) => `${d.extracted} BU · ${d.staff} staff${d.lost ? ` · ${d.lost} lost` : ''}${d.offline ? ` · dark ${Math.round(d.offline)}s` : ''}`,
     lease: (k, n) => `Night ${k} of ${n}`,
+    costs: (c) => `Operating costs: payroll ${c.payroll.toLocaleString('en-US')} BU (${c.heads} staff), upkeep ${c.upkeep.toLocaleString('en-US')} BU.${c.short ? ` We were ${c.short.toLocaleString('en-US')} BU short. Payroll is "under review". Morale has been informed.` : ''}`,
+    bottleneck: { host: 'The host', storage: 'Storage and refining', spots: 'Bite spots', staff: 'Headcount', hazards: 'Interruptions' },
+    hostLine: (h, leaseLeft) => { const pct = (v) => Math.round(v * 100), d = pct(h.after) - pct(h.before);
+      return `Condition ${pct(h.before)}% → ${pct(h.after)}% (${d >= 0 ? '+' : ''}${d}). Tonight he can comfortably spare about ${h.next.toLocaleString('en-US')} BU. ${h.taken > h.supply * 1.02 ? 'We took more than he could spare; that is what tomorrow costs.' : leaseLeft <= 1 ? 'Last night of the lease: there is no tomorrow to save him for.' : 'Ease off when he runs dry and he keeps more for tomorrow.'}`; },
     clot: (r) => r.clotted > 0 ? `${r.clotted} BU clotted overnight${r.refined ? `; ${r.refined} BU was refined and kept` : ''}.` : r.refined ? `${r.refined} BU refined. Nothing clotted.` : '',
     note: (r) => r.night === 1 ? (r.staff ? 'Last night it was just me. This morning we are a company. — R.' : 'Tonight we hire. Nobody builds an empire alone. — R.') : r.lost.length ? 'We keep going. It is what they would have wanted. Probably. — R.' : 'He has no idea. Let\'s keep it that way. — R.',
   };
@@ -368,6 +397,9 @@
     ['Careers', 'Every night survived counts. Interns become Associates, then Senior Associates, then Partners. Each rank bites faster and carries more. Losing a Partner is a real loss.'],
     ['R&D', 'From the fourth day: a lab, then two lines of research. Numbing agent means less itch. Blood thinner means faster, fuller bites, but he notices more of them.'],
     ['His limit', 'He only has so much to give a night. Past it every bite brings up less. Watch him: he gets paler as the lease goes on.'],
+    ['His condition', 'He does not fully recover between nights. Take him dry and tomorrow he has less to give, and he starts asking questions. Ease off once he runs dry to leave him something.'],
+    ['Operating costs', 'Payroll and upkeep are paid every morning. A bigger company is not always a better one: the morning report says what actually held us back.'],
+    ['Executives', 'Tap the lookout perch or a GM podium to choose who holds the job. Veterans do it better. They are also your best biters.'],
     ['Zoom', 'Pinch, scroll or press + and - to zoom.'],
     ['Mornings', 'The colony keeps. Every night starts where the last one ended.'],
   ];
