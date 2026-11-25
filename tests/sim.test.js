@@ -4,45 +4,7 @@ require('../src/config.js'); require('../src/campaign.js'); require('../src/sim.
 const { sim, config: C, campaign: K } = globalThis.MA;
 const DT = 1 / 30;
 
-// a human-paced player: holds until Rhonda is full (plus a beat), rests between trips, takes a moment to act on a
-// new card, builds on the shortest-trip pad, and presses Scatter a little after the hand starts to move
-function play(camp, opts) {
-  opts = opts || {};
-  const S = sim.newNight(camp, { seed: opts.seed || 7 });
-  const log = { firstDeposit: null, unlock: {}, built: {}, firstHire: null, firstAuto: null, tutScratch: null, order: [] };
-  let rest = 0, recallAt = null; const seen = {};
-  while (S.state !== 'over' && S.time < 600) {
-    const f = S.founder;
-    if (!opts.passive) {
-      if (f.st === 'home') { rest += DT; S.hold = rest > (opts.rest || 0.8); }
-      else if (f.st === 'drink') S.hold = opts.greedy ? true : f.greed < 0.25;
-      else if (f.st === 'toSkin') S.hold = true; else { S.hold = false; rest = 0; }
-      if (opts.handsOff && S.workers.length >= 2) S.hold = false;
-      if (S.unlocked.includes('push') && opts.push) { const want = opts.push === 'always' || (opts.push === 'timed' && S.depth > 0.55); if ((S.pace === 2) !== want) sim.setPush(S, want); }
-    }
-    sim.step(S, DT); if (opts.drain) { S.bank = 0; S.refined = 0; }
-    for (const e of S.events) {
-      if (e.type === 'deliver' && e.founder && log.firstDeposit === null) log.firstDeposit = S.time;
-      if (e.type === 'deliver' && !e.founder && log.firstAuto === null) log.firstAuto = S.time;
-      if (e.type === 'unlock') { log.unlock[e.what] = S.time; log.order.push(e.what); }
-      if (e.type === 'build' && !e.upgrade) log.built[e.b.type] = log.built[e.b.type] || S.time;
-      if (e.type === 'hatch' && e.first) log.firstHire = S.time;
-      if (e.type === 'telegraph' && e.tutorial) log.tutScratch = S.time;
-      if (e.type === 'telegraph' && opts.careful && (e.kind === 'swat' || e.kind === 'scratch')) recallAt = S.time + 0.6;
-      if (e.type === 'impact' && e.tutorial) log.tutResult = { dead: e.dead.length, nearMiss: e.nearMiss };
-    }
-    S.events.length = 0;
-    if (recallAt !== null && S.time >= recallAt) { sim.recall(S); recallAt = null; }
-    if (!opts.passive && !opts.noBuild) for (const t of opts.buildOrder || ['tank', 'pool', 'rig']) {
-      if (!S.unlocked.includes(t)) continue; seen[t] = seen[t] || S.time;
-      if (S.time - seen[t] < 2.5 || sim.costOf(S, t) > S.bank) continue;
-      if (t === 'tank' && sim.derived(S).counts.tank > 0 && S.queued === 0 && S.bank < sim.derived(S).cap * 0.85) continue;
-      const pads = sim.padsByTrip(S); const p = opts.far ? pads[pads.length - 1] : pads[0]; // with no pads left the card upgrades instead
-      if (sim.build(S, t, p && p.pad)) break;
-    }
-  }
-  return { S, log, r: sim.report(S) };
-}
+const { play } = require('./bot.js');
 
 // ---------- night 1: the tutorial arc ----------
 const n1 = play(K.newCampaign(), { careful: true, handsOff: true });
@@ -249,5 +211,66 @@ const runNight = (S, secs, each) => { while (S.state === 'playing' && S.time < s
   const firstFan = (L) => { const i = L.findIndex((x) => x.counters.includes('fan')); return i < 0 ? 99 : i; };
   assert.ok(firstFan(reckless.log) < firstFan(careful.log), 'pushing all night and ignoring the hand brings the fan sooner');
   assert.ok(careful.log[5].ml > careful.log[0].ml * 1.5, 'a careful colony is still growing by night 6');
+}
+
+// ---------- phase 3b: the lookout, HR, storage and the morning report ----------
+// every warning can be answered: the hand never comes back before Scatter has recharged
+{
+  const camp = colony({ workers: staff(17), buildings: [{ type: 'tank', level: 3, pad: 1 }, { type: 'pool', level: 3, pad: 9 }, { type: 'pool', level: 3, pad: 3 }, { type: 'rig', level: 5, pad: -1 }] });
+  const S = sim.newNight(camp, { seed: 3 }); S.schedule = []; sim.setPush(S, true); let last = null, gap = Infinity;
+  runNight(S, 200, (x) => { x.bank = 0; x.refined = 0; for (const e of x.events) if (e.type === 'telegraph' && (e.kind === 'swat' || e.kind === 'scratch')) { if (last !== null) gap = Math.min(gap, x.time - last); last = x.time; } });
+  console.log('hand gap ', { shortest: +gap.toFixed(1), recharge: C.FEEL.recall_cooldown_s });
+  assert.ok(gap > C.FEEL.recall_cooldown_s, 'a big crew pushing all night still cannot bring the hand back faster than Scatter recharges');
+}
+// HR: pools hatch only up to the arm's spots plus spares; a rig raises the ceiling
+{
+  const S = sim.newNight(colony({ workers: staff(4), buildings: [{ type: 'tank', level: 1, pad: 1 }, { type: 'pool', level: 3, pad: 9 }, { type: 'pool', level: 3, pad: 3 }] }), { seed: 4 }); S.schedule = [];
+  runNight(S, 120, (x) => { x.bank = 400; x.irritation = 0; });
+  const d = sim.derived(S); assert.strictEqual(d.crewCap, d.slots + C.ECON.reserveStaff); assert.strictEqual(S.workers.length, d.crewCap, 'hiring stops at the arm\'s capacity, not the pools\''); assert.ok(S.stats.hrCapped);
+  S.unlocked.push('rig'); S.bank = 500; sim.build(S, 'rig'); runNight(S, 200, (x) => { x.bank = 400; x.irritation = 0; }); assert.ok(S.workers.length > d.crewCap, 'a rig lets HR hire again');
+}
+// tanks hold raw blood; refined blood keeps elsewhere, so a refinery frees tank space
+{
+  const S = sim.newNight(colony({ bank: 600, refined: 560, buildings: [{ type: 'tank', level: 1, pad: 1 }, { type: 'pool', level: 2, pad: 9 }, { type: 'refinery', level: 1, pad: 3 }] }), { seed: 5 });
+  assert.strictEqual(S.bank, 600, 'refined blood does not count against the tanks'); runNight(S, 30, (x) => { x.irritation = 0; });
+  assert.ok(S.extracted > 0 && sim.raw(S) <= sim.derived(S).cap + 1e-6, 'staff keep unloading while the tanks have raw room');
+}
+// the lookout: founded after the first death, the longest-serving employee, calls swats (not scratches), then does paperwork
+{
+  const S = sim.newNight(colony({ workers: staff(8) }), { seed: 6 }); S.schedule = [];
+  const crowd = () => { S.hev = null; S.eventCd = 1e9; S.siteBlocked = 0; S.covered = 0; S.recallT = 0; for (let i = 0; i < 900 && S.workers.filter((w) => w.st === 'bite').length < 3; i++) { S.irritation = 0; sim.step(S, DT); S.events.length = 0; } };
+  const swat = () => { crowd(); S.events.length = 0; sim.startEvent(S, 'swat'); const ev = []; for (let i = 0; i < 100; i++) { sim.step(S, DT); ev.push(...S.events); S.events.length = 0; } return ev; };
+  for (let i = 0; i < 10 && !S.lost.length; i++) swat();
+  assert.ok(S.lost.length > 0 && S.unlocked.includes('lookout'), 'the first death founds OH&S');
+  S.bank = 500; assert.ok(sim.build(S, 'lookout')); const lw = S.workers.find((w) => w.job === 'lookout');
+  assert.strictEqual(lw.id, Math.min(...S.workers.map((w) => w.id)), 'the longest-serving employee gets the whistle');
+  S.recallCd = 0; const before = S.lost.length, ev = swat();
+  assert.ok(ev.some((e) => e.type === 'recall' && e.by === 'lookout') && S.lost.length === before, 'the lookout calls the swat and nobody dies'); assert.strictEqual(S.recallCd, 0, 'the lookout\'s whistle leaves your Scatter charged');
+  assert.ok(S.lookoutCd > C.ECON.lookoutReport[0] - 4, 'then the lookout files Form 7-B'); assert.ok(lw.st === 'post' && S.workers.includes(lw), 'the lookout never goes on the skin');
+  for (let i = 0; i < 10 && !S.stats.deadOnReport; i++) { if (!S.lookoutCd) S.lookoutCd = 20; swat(); } assert.ok(S.stats.deadOnReport > 0, 'a swat during the paperwork gets through');
+  S.lookoutCd = 0; crowd(); S.events.length = 0; sim.startEvent(S, 'scratch'); let called = false; for (let i = 0; i < 60; i++) { sim.step(S, DT); if (S.events.some((e) => e.type === 'recall')) called = true; S.events.length = 0; } assert.ok(!called, 'scratches are not in the job description');
+  S.bank = 500; sim.build(S, 'lookout'); S.lookoutCd = 0; swat(); assert.ok(S.lookoutCd > C.ECON.lookoutReport[1] - 4 && S.lookoutCd <= C.ECON.lookoutReport[1], 'a Safety Officer files faster');
+  const camp = K.fold(colony({ workers: staff(8) }), S, sim.report(S)); assert.ok(camp.buildings.some((b) => b.type === 'lookout' && b.level === 2), 'the lookout is saved');
+  const N = sim.newNight(camp, { seed: 1 }); assert.strictEqual(N.workers.filter((w) => w.job === 'lookout').length, 1, 'and back on the perch the next night');
+}
+// the morning report names what held the colony back, most expensive first
+{
+  const S = sim.newNight(colony({ workers: staff(6), bank: 150, buildings: [{ type: 'tank', level: 1, pad: 1 }, { type: 'pool', level: 2, pad: 9 }] }), { seed: 7 }); S.schedule = [];
+  runNight(S, 60, (x) => { x.irritation = 0; }); const r = sim.report(S), held = C.MORNING.held(r);
+  assert.ok(r.storageFullSec > 50 && r.extracted === 0, 'full tanks all night collect nothing'); assert.strictEqual(C.MORNING.headline(r), 'Storage was full. All night.');
+  assert.ok(/Storage was full/.test(held[0].text) && /tank/.test(held[0].fix), 'and the report says so first, with what to build');
+  const T = sim.newNight(colony({ workers: staff(8) }), { seed: 8 }); T.schedule = []; for (let k = 0; k < 10 && !T.lost.length; k++) { T.hev = null; T.eventCd = 1e9; T.recallT = 0; T.siteBlocked = 0; for (let i = 0; i < 900 && T.workers.filter((w) => w.st === 'bite').length < 3; i++) { T.irritation = 0; T.bank = 0; sim.step(T, DT); T.events.length = 0; } sim.startEvent(T, 'swat'); for (let i = 0; i < 100; i++) { sim.step(T, DT); T.events.length = 0; } }
+  const h2 = C.MORNING.held(sim.report(T)); assert.ok(h2.some((h) => /We lost/.test(h.text) && /lookout/i.test(h.fix)), 'casualties come with their causes and the lookout as the fix');
+}
+// balance: careful vs reckless, with and without a lookout, six nights, three seeds (tests/balance.js prints the full table)
+{
+  const B = require('./balance.js'), [cn, cl, rn, rl] = [B.run('careful', false), B.run('careful', true), B.run('reckless', false), B.run('reckless', true)];
+  const late = (x) => (x.per[3].lost + x.per[4].lost + x.per[5].lost) / 3;
+  console.log('balance  ', JSON.stringify({ carefulLostPerLateNight: +late(cn).toFixed(1), reckless: Math.round(rn.lost), recklessWithLookout: Math.round(rl.lost), careful: Math.round(cn.lost), carefulWithLookout: Math.round(cl.lost), hire: [cn, rn].map((x) => Math.round(x.hireSpend)) }));
+  assert.ok(late(cn) <= 6, 'careful managers no longer lose 20-30 a night from night 4');
+  assert.ok(rn.lost >= cn.lost * 4 && rn.hireSpend >= cn.hireSpend * 3, 'reckless management is far more dangerous and far more expensive');
+  assert.ok(cl.lost < cn.lost && rl.lost < rn.lost * 0.8, 'a lookout saves lives for both');
+  assert.ok(rl.lost > rn.lost * 0.3, 'but a reckless colony with a lookout is nowhere near invulnerable');
+  assert.ok(cn.per[5].blood > cn.per[0].blood * 4, 'a growing workforce keeps paying');
 }
 console.log('sim ok');

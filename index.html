@@ -59,7 +59,7 @@
       <p class="coach" id="coach" role="status" hidden></p>
       <div class="memo" id="memo" aria-live="polite" hidden><p><b>Sticky note from Rhonda</b><span id="memo-text"></span></p></div>
       <div class="actions">
-        <button type="button" class="recall" id="recall" hidden>SCATTER</button>
+        <button type="button" class="recall" id="recall" hidden>SCATTER<small id="lookout-state" hidden></small></button>
         <button type="button" class="recall nightfall" id="nightfall" hidden>NIGHTFALL</button>
         <div class="pace" id="pace" role="group" aria-label="Pace" hidden><button type="button" id="ease" aria-pressed="true">Ease off</button><button type="button" id="push" aria-pressed="false">Push</button></div>
         <span class="gap"></span>
@@ -111,6 +111,7 @@
       <div class="payroll" id="r-payroll" hidden><h3>On payroll</h3><p id="r-staff-list"></p></div>
       <p class="clot" id="r-clot" hidden></p>
       <p class="sus" id="r-sus" hidden></p>
+      <div class="held" id="r-held"><h3>What held us back</h3><ul id="r-held-list"></ul></div>
       <div class="memoriam" id="r-memoriam" hidden><h3>In memoriam</h3><ul id="r-lost-list"></ul></div>
       <div class="plan"><h3>Tonight</h3><ul id="r-plan"></ul></div>
       <button class="btn-go" id="again" type="button">START THE DAY</button>

@@ -18,6 +18,12 @@ There is no build step and there are no dependencies.
 - **Scatter** (Space) pulls everyone off the skin when the hand moves.
 - From night 2 he **sleeps in waves**. **Push** (F) while he is deep under: bites are twice as fast and so is the itch.
   **Ease off** when he goes light, or the hand comes.
+- After the first loss Rhonda founds **Occupational Health & Safety**: a **Lookout** in hi-vis on a perch above the bite
+  calls swats and Scatters for you, then files Form 7-B for 24 seconds (15 once promoted to Safety Officer).
+  Scratches, and any swat that lands during the paperwork, are still yours.
+- **HR** only hatches staff up to the spots on the arm plus two spares: a rig, not a pool, is how the crew grows.
+- Every morning the report lists **what held us back** (full storage, casualties and their causes, interruptions,
+  queues for the arm, clotting), most expensive first, with what would fix it.
 - **Suspicion** builds from bites, scratches, swats and, most of all, squashed staff. Past a point he buys things:
   a **fan** (every flight slower; answered by a **Windbreak**), then a **repellent** (bites slower; answered by **Gas masks**).
   He forgets some of it each day.
@@ -40,6 +46,8 @@ There is no build step and there are no dependencies.
 | `src/audio.js` | Sound effects and music |
 | `src/main.js` | Boot, the opening, frame loop, input, HUD |
 | `tests/sim.test.js` | Headless simulation and save checks: `node tests/sim.test.js` |
+| `tests/balance.js` | Balance report, careful vs reckless with and without a lookout: `node tests/balance.js [nights] [seeds]` |
+| `tests/bot.js` | The test players (a human-paced night bot and a campaign runner) |
 | `art-direction/` | The approved look and the shot list |
 
 Progress is saved under `murders-acquisitions.v2`. A save from the earlier one-shift game (`murders-acquisitions.v1`)

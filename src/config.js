@@ -27,7 +27,7 @@
   const ECON = {
     startBank: 0, baseHousing: 0, loadMl: 6, refinePerStation: 2.0,
     hireBase: 10, hirePerHead: 6, hatchSeconds: 7.5, firstHatchSeconds: 4.5,
-    irritationPerBiter: 0.5, eventThreshold: 40, eventRelief: 28, eventCooldown: 7,
+    irritationPerBiter: 0.5, eventThreshold: 40, eventRelief: 28, eventCooldown: 9.5,
     scratchKill: 0.25, swatKill: 0.6, scratchSleepCost: 3, swatSleepCost: 6, stirSleepCost: 15, lateLightSleepAt: 225,
     quotas: [300, 1000, 2100, 3400], maxLevel: 3,
     // the founder bites by hand: she holds 5 mL, drinks it in about 1.4 s, and itches him if she keeps going
@@ -43,6 +43,10 @@
     // countermeasures, in the order he buys them, and the suspicion that sets each one off
     counters: [{ id: 'fan', at: 40, answer: 'windbreak' }, { id: 'repellent', at: 75, answer: 'masks' }],
     fanFlightFactor: 1.5, repellentBiteFactor: 1.6,
+    // HR: pools only hatch up to the bite spots on the arm plus a couple of spares (and the lookout's seat)
+    reserveStaff: 2,
+    // the lookout: how fast they call a swat, and the paperwork after every call (Form 7-B), by level. Swats only: scratches stay the player's
+    lookoutReaction: 0.45, lookoutReport: [24, 15],
   };
   const PACE = [
     { id: 'cautious', label: 'Ease off', bite: 1.25, fly: 1.1, irritation: 0.4, morale: 0.10 },
@@ -60,11 +64,12 @@
     drip: { name: 'Drip line', short: 'Drip', cost: 110, growth: 1, blurb: 'A funnel at the bite, piped straight to storage. Staff unload right where they drink.', effect: () => 'Unloads at the bite', gain: 'Shortest trips', single: true, maxLevel: 1 },
     windbreak: { name: 'Windbreak', short: 'Windbreak', cost: 90, growth: 1, blurb: 'A cereal box, flattened, between the fan and the bite. Flights are back to normal.', effect: () => 'Cancels the fan', gain: 'Cancels the fan', single: true, maxLevel: 1 },
     masks: { name: 'Gas masks', short: 'Masks', cost: 140, growth: 1, blurb: 'Tiny masks for every employee. Bites are back to normal speed. Morale is complicated.', effect: () => 'Cancels the repellent', gain: 'Cancels the repellent', single: true, maxLevel: 1 },
+    lookout: { name: 'Lookout', short: 'Lookout', cost: 60, growth: 2.5, blurb: 'Occupational Health & Safety. One employee in hi-vis on a perch above the bite, with a whistle. Calls swats, then files Form 7-B.', effect: (l) => l >= 2 ? 'Safety Officer · calls swats · 15 s of paperwork' : 'Calls swats · 24 s of paperwork', gain: 'Calls swats for you', upgradeGain: 'Promote: faster paperwork', single: true, maxLevel: 2 },
     floor: { name: 'Floor space', short: 'Floor', cost: 60, growth: 1, blurb: 'The window side of the room, unclaimed. Four more places to build.', effect: () => '+4 build spots', gain: '+4 build spots', single: true, maxLevel: 1, expand: true },
     hatchery: { name: 'Hatchery', short: 'Hatchery', cost: 70, growth: 1.7, blurb: 'Nurses raise new hires here. Each hire costs banked blood.', effect: (l) => `${2 * l} nurse stations`, gain: '+2 nurses' },
   };
   // the cards a player can see, in order; refinery and hatchery return with the day phase
-  const BUILD_ORDER = ['windbreak', 'masks', 'tank', 'pool', 'refinery', 'rig', 'drip', 'floor'];
+  const BUILD_ORDER = ['windbreak', 'masks', 'lookout', 'tank', 'pool', 'refinery', 'rig', 'drip', 'floor'];
   // where Rhonda founded the company: a bottle cap under the bed, a short hop from the arm
   const NEST = [8.1, 3.3];
   // the floor opens in zones: the near floor first, the window side when it runs out (indices into PADS)
@@ -140,6 +145,13 @@
       repellent: 'There is a plug-in by the bed now. It smells like a pine forest and litigation. Bites take longer. — R.',
     },
     answered: { windbreak: 'Windbreak up. The fan is now cooling a cereal box. — R.', masks: 'Masks on. Everyone looks very professional. — R.' },
+    ohsFounded: (name) => `We lost ${name}. Effective immediately I am founding an Occupational Health & Safety department. It is one employee with a whistle. — R.`,
+    lookoutHired: (name) => `${name} is our Lookout. Title: Head of Occupational Health & Safety. Headcount: one. Budget: a whistle. — R.`,
+    lookoutCalled: (name) => `${name} called it. Nobody hurt. ${name.split(' ')[0]} is now filling in Form 7-B, which takes twenty-four seconds. — R.`,
+    lookoutBusy: 'The hand came back while the lookout was filing paperwork. Scatter is still your job. — R.',
+    lookoutScratch: 'The lookout does not do scratches. It is not in the job description. — R.',
+    lookoutPromoted: (name) => `${name} is now our Safety Officer. Paperwork is faster. Scratches are still not in the job description. Morale in the department: one. — R.`,
+    hrPause: (slots) => `HR has paused hiring. The arm has ${slots} spots and we have people waiting for them. A rig, not a pool. — R.`,
     nightStart: (n, staff) => n === 2 ? `Night 2. ${staff ? `${staff} on payroll. ` : ''}Same arm, bigger plans. — R.` : `Night ${n}. ${staff} on payroll. Let's circle back to the arm. — R.`,
     idle: [
       'I have started calling the arm "the pipeline". — R.',
@@ -154,9 +166,28 @@
 
   // the first morning, and every morning after: what happened, and what tonight could be
   const MORNING = {
-    headline: (r) => r.night === 1 ? `${r.extracted} mL. Not bad for one mosquito.` : r.lost.length ? 'We lost people last night.' : `${r.extracted} mL. ${r.staff} employees. One vision.`,
+    headline: (r) => r.extracted === 0 && r.storageFullSec > 4 ? 'Storage was full. All night.' : r.storageFullSec > 4 && r.lostToStorage > r.extracted * 0.3 ? 'We ran out of places to put it.' : r.night === 1 ? `${r.extracted} mL. Not bad for one mosquito.` : r.lost.length ? 'We lost people last night.' : `${r.extracted} mL. ${r.staff} employees. One vision.`,
     suspicion: (s, gain, next) => `Suspicion ${Math.round(s)}% (${gain >= 0 ? '+' : ''}${Math.round(gain)} last night, less what he forgets today).${next ? ` At ${next.at}% he ${next.id === 'fan' ? 'buys something' : 'buys something else'}.` : ''}`,
     bought: (s, id) => `Suspicion ${Math.round(s)}%. He has had enough: he is buying a ${id === 'fan' ? 'fan' : 'mosquito repellent'} today.`,
+    // what held us back: each line is a cause, roughly what it cost, and what would fix it. Most expensive first
+    held: (r) => {
+      const t = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`, out = [];
+      if (r.storageFullSec > 4) out.push({ ml: r.lostToStorage, text: `Storage was full for ${t(r.storageFullSec)}. About ${r.lostToStorage} mL had nowhere to go.`, fix: 'Build or upgrade a tank.' });
+      if (r.lost.length) {
+        const parts = [r.deadBy.swat ? `${r.deadBy.swat} to swats` : '', r.deadBy.scratch ? `${r.deadBy.scratch} to scratches` : ''].filter(Boolean).join(', ');
+        const late = r.deadWhileCooling ? ` ${r.deadWhileCooling} died with Scatter still recharging.` : r.deadOnReport ? ` ${r.deadOnReport} died while the lookout filed paperwork.` : '';
+        out.push({ ml: r.replaceCost, text: `We lost ${r.lost.length} (${parts}).${late} Replacing them costs about ${r.replaceCost} mL.`, fix: !r.lookout ? 'A lookout calls swats for you. Ease off in light sleep.' : r.deadBy.scratch >= r.deadBy.swat ? 'Scratches are yours: the lookout only does swats. Scatter early.' : r.lookout < 2 && r.deadOnReport ? 'Promote the lookout: Safety Officers file faster.' : 'Ease off in light sleep. Scatter early.' });
+      }
+      if (r.offArmSec > 10) out.push({ ml: r.lostToInterruptions, text: `The line stopped ${r.hits + r.calls} times (${r.hits} hands, ${r.calls} Scatters). ${t(r.offArmSec)} off the arm, about ${r.lostToInterruptions} mL.`, fix: r.lookout ? 'Ease off when he goes light.' : 'Ease off when he goes light, and push when he is deep.' });
+      if (r.lostToCrowd > 20) out.push({ ml: r.lostToCrowd, text: `Staff queued for a spot on the arm. About ${r.lostToCrowd} mL of standing around.`, fix: r.rigMaxed ? 'The rig is as big as it gets.' : 'An extraction rig fits more on.' });
+      if (r.clotted > 0) out.push({ ml: r.clotted, text: `${r.clotted} mL clotted by morning.`, fix: r.refineries ? 'More refining, or spend it before dawn.' : 'A refinery keeps it.' });
+      if (r.fanLoss) out.push({ ml: r.fanLoss, text: 'The fan slowed every flight.', fix: 'A windbreak cancels it.' });
+      if (r.repellentLoss) out.push({ ml: r.repellentLoss, text: 'The repellent slowed every bite.', fix: 'Gas masks cancel it.' });
+      if (r.hrCapped && !out.length) out.push({ ml: 0, text: `HR stopped hiring at ${r.crewCap}: the arm only has ${r.slots} spots.`, fix: 'An extraction rig, not a pool.' });
+      out.sort((a, b) => b.ml - a.ml);
+      return out.slice(0, 3);
+    },
+    heldNone: 'Nothing held us back. Corporate will find something. — R.',
     clot: (r) => r.clotted > 0 ? `${r.clotted} mL clotted overnight${r.refined ? `; ${r.refined} mL was refined and kept` : ''}.` : r.refined ? `${r.refined} mL refined. Nothing clotted.` : '',
     note: (r) => r.night === 1 ? (r.staff ? 'Last night it was just me. This morning we are a company. — R.' : 'Tonight we hire. Nobody builds an empire alone. — R.') : r.lost.length ? 'We keep going. It is what they would have wanted. Probably. — R.' : 'He has no idea. Let\'s keep it that way. — R.',
   };
@@ -239,6 +270,8 @@
     ['Placement', 'You choose where things go. Storage close to the bite means shorter trips.'],
     ['Scatter', 'When the hand twitches, Scatter pulls everyone off the skin.'],
     ['Clotting', 'Raw blood clots by morning. Refineries turn stored blood into blood that keeps.'],
+    ['The lookout', 'After the first loss, Rhonda founds Occupational Health & Safety: one employee in hi-vis who calls swats and Scatters for you, then spends a while on paperwork. Scratches, and any swat that lands during the paperwork, are still yours.'],
+    ['HR', 'Pools only hatch up to the spots on the arm plus a couple of spares. More bite spots (a rig) means more staff.'],
     ['Days', 'While he is at work there is no clock and no hand. Build, then call nightfall.'],
     ['His sleep', 'From the second night he sleeps in waves. Bites itch far less in deep sleep. Push while he is deep under and ease off when he goes light.'],
     ['Suspicion', 'Every bite and every scratch makes him a little more suspicious. Past a point he buys things: a fan, then worse. Each has one answer.'],

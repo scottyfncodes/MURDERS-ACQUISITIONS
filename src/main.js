@@ -144,7 +144,7 @@
       const def = C.BUILDINGS[type], cost = sim.costOf(S, type), el = cards[type];
       const own = def.single ? (d.rigLevel ? `Lv ${d.rigLevel}` : 'new') : d.counts[type] ? `×${d.counts[type]}` : 'new';
       const up = !def.single && !sim.freePads(S).length && cost !== Infinity, price = cost === Infinity ? (def.single ? `Max · ${own}` : `Maxed · ${own}`) : up ? `Upgrade · ${fmt(cost)} mL` : `${fmt(cost)} mL · ${own}`;
-      const sub = up ? 'Upgrades the cheapest one' : def.gain; if (el._sub !== sub) { el._sub = sub; el.children[1].textContent = sub; }
+      const owned = def.single && S.buildings.some((b) => b.type === type), sub = up ? 'Upgrades the cheapest one' : owned && def.upgradeGain ? def.upgradeGain : def.gain; if (el._sub !== sub) { el._sub = sub; el.children[1].textContent = sub; }
       if (el._price !== price) { el._price = price; el.children[2].textContent = price; }
       el.classList.toggle('can', cost <= S.bank);
     }
@@ -222,7 +222,7 @@
         case 'full': audio.play('click'); break;
         case 'telegraph': if (e.kind === 'swat' || e.kind === 'scratch') { audio.play('warn'); $('recall').classList.add('alarm'); } break;
         case 'impact': $('recall').classList.remove('alarm'); if (e.kind === 'swat' || e.kind === 'scratch') { audio.play('hit'); if (e.kind === 'swat' && !R.fx.reduced) G.hitStop = C.FEEL.hit_stop_ms / 1000; flash('p-clock', 'pulse'); if (e.dead.length) flash('p-staff', 'deny'); } break;
-        case 'recall': audio.play('whistle'); break;
+        case 'recall': audio.play('whistle'); if (e.by === 'lookout') G.lookoutFlash = performance.now() / 1000; break;
         case 'push': audio.play(e.on ? 'buzz' : 'click'); break;
         case 'hatch': audio.play('hatch', 0.5); flash('p-staff', 'pulse');
           if (e.first) { audio.play('quota'); audio.play('stamp'); G.hireAt = performance.now() / 1000; if (!R.fx.reduced) { G.slow = 1.4; G.punch = { f: [e.at[0], e.at[1], 1.4], until: performance.now() / 1000 + 2.4 }; } }
@@ -248,6 +248,10 @@
     $('r-memoriam').hidden = r.lost.length === 0;
     const clot = C.MORNING.clot(r); $('r-clot').hidden = !clot; $('r-clot').textContent = clot;
     $('r-sus').hidden = false; const s0 = Math.min(100, before.suspicion + r.suspicion), nc = save.campaign.newCounter; $('r-sus').textContent = nc ? C.MORNING.bought(s0, nc) : C.MORNING.suspicion(s0, r.suspicion, K.nextCounter(before)); $('r-sus').classList.toggle('alarm', !!nc);
+    // what held us back: the most expensive causes first, each with what would fix it
+    const hl = $('r-held-list'), held = C.MORNING.held(r); hl.innerHTML = '';
+    if (!held.length) { const li = document.createElement('li'); li.className = 'none'; li.textContent = C.MORNING.heldNone; hl.append(li); }
+    for (const h of held) { const li = document.createElement('li'), sp = document.createElement('span'); li.textContent = h.text; sp.textContent = h.fix; li.append(sp); hl.append(li); }
     const plan = $('r-plan'); plan.innerHTML = ''; K.plan(save.campaign).forEach((t) => { const l = document.createElement('li'); l.textContent = t; plan.append(l); });
     $('again').textContent = 'START THE DAY'; $('hud').hidden = true;
     openModal('review'); $('review').setAttribute('data-ready', '');
@@ -284,13 +288,15 @@
     const S = G.S, d = sim.derived(S), f = S.founder;
     if (f.st !== 'home' || S.hold) G.idleAt = now;
     G.bankShown = G.bankShown === undefined || Math.abs(S.bank - G.bankShown) < 0.6 ? S.bank : G.bankShown + (S.bank - G.bankShown) * Math.min(1, dt / (C.FEEL.counter_ease_ms / 1000) * 2.2);
-    set('v-bank', fmt(Math.floor(G.bankShown))); set('v-cap', `/${fmt(d.cap)}`);
+    // before a refinery: what is stored / what the tanks hold. After: everything spendable, with the tanks' raw fill as a gauge
+    const hasRef = S.buildings.some((b) => b.type === 'refinery'), rawNow = sim.raw(S), tanksFull = rawNow >= d.cap - 0.5;
+    set('v-bank', fmt(Math.floor(G.bankShown))); set('v-cap', hasRef ? '' : `/${fmt(d.cap)}`);
     const rate = Math.round(S.rate / 5) * 5; show('v-rate', rate > 0); if (rate > 0) set('v-rate', `+${rate} mL/min`);
-    $('p-bank').classList.toggle('full', S.bank >= d.cap - 0.5);
+    $('p-bank').classList.toggle('full', tanksFull);
     if (S.phase === 'day') { set('l-clock', 'At work'); set('v-clock', `Day ${S.night - 1}`); }
     else { set('l-clock', 'Alarm in'); set('v-clock', clock(S.shiftLen - S.sleepLost - S.time)); $('p-clock').classList.toggle('cut', S.shiftLen - S.sleepLost - S.time < 20); }
-    const hasRef = S.buildings.some((b) => b.type === 'refinery'); show('p-refined', hasRef); if (hasRef) { const w = Math.round((S.refined / Math.max(1, S.bank)) * 100); if (G.shown.rw !== w) { G.shown.rw = w; $('b-refined').style.width = w + '%'; $('p-refined').title = `${Math.floor(S.refined)} mL refined`; } }
-    show('p-staff', S.hires > 0 || S.workers.length > 0); set('v-staff', String(S.workers.length)); set('v-housing', `/${d.housing}`);
+    show('p-refined', hasRef); if (hasRef) { const w = Math.round((rawNow / Math.max(1, d.cap)) * 100); if (G.shown.rw !== w) { G.shown.rw = w; $('b-refined').style.width = w + '%'; $('p-refined').title = `Tanks ${Math.floor(rawNow)}/${d.cap} mL raw · ${Math.floor(S.refined)} mL refined`; } }
+    show('p-staff', S.hires > 0 || S.workers.length > 0); set('v-staff', String(S.workers.length)); set('v-housing', `/${Math.min(d.housing, d.crewCap)}`);
     // one plate, two jobs: his sleep and itch at night; his suspicion (and when he next buys something) in the day
     const day = S.phase === 'day', sus = save.campaign.suspicion, nxt = K.nextCounter(save.campaign);
     show('p-irr', day ? S.night > 2 || sus > 0 : S.unlocked.includes('scatter'));
@@ -298,6 +304,9 @@
     $('p-irr').classList.toggle('light', !day && S.rhythm && S.depth < 0.35); $('p-irr').classList.toggle('deep', !day && S.rhythm && S.depth > 0.6);
     const ip = Math.round(day ? sus : S.irritation); if (G.shown.ip !== ip + (day ? 'd' : 'n')) { G.shown.ip = ip + (day ? 'd' : 'n'); $('b-irr').style.width = ip + '%'; $('p-irr').querySelector('u').style.left = `${day ? (nxt ? nxt.at : 100) : C.ECON.eventThreshold}%`; }
     show('pace', !day && S.unlocked.includes('push')); const pv = String(S.pace === 2); if (G.shown.pv !== pv) { G.shown.pv = pv; $('push').setAttribute('aria-pressed', pv); $('ease').setAttribute('aria-pressed', String(S.pace !== 2)); }
+    // the lookout's state, under the Scatter button: ready, or how long the paperwork has left
+    const lw = S.workers.find((w) => w.job === 'lookout'), ls = $('lookout-state'), lt = lw ? (S.lookoutCd > 0 ? `Form 7-B · ${Math.ceil(S.lookoutCd)}s` : 'Lookout ready') : '';
+    if (G.shown.lt !== lt) { G.shown.lt = lt; ls.hidden = !lt; ls.textContent = lt; ls.classList.toggle('busy', S.lookoutCd > 0); }
     const rc = $('recall'), cd = S.recallCd > 0; rc.classList.toggle('cooling', cd); rc.style.setProperty('--cd', cd ? `${(S.recallCd / (C.FEEL.recall_cooldown_s * S.mods.recallCd)) * 100}%` : '0%');
     if (!(S.hev && !S.hev.hit && (S.hev.kind === 'swat' || S.hev.kind === 'scratch'))) rc.classList.remove('alarm');
     const ct = coachText(S, now), coach = $('coach'), txt = ct ? ct[0] : '';
@@ -365,7 +374,7 @@
   // ---------- measurement hooks (PLAYCRAFT, the shot list, the feature checks) ----------
   const fxName = (S) => (S && S.hev && S.hev.kind === 'swat' ? (S.hev.hit ? 'swat-impact' : 'swat-warning') : S && S.hev ? S.hev.kind : null);
   window.__game = {
-    get state() { return G.mode === 'title' ? 'title' : G.mode === 'opening' ? 'opening' : G.S.state; }, get phase() { return G.S ? G.S.phase : save.campaign.phase; }, get refined() { return G.S ? Math.floor(G.S.refined) : 0; }, get depth() { return G.S ? G.S.depth : 1; }, get pushing() { return !!(G.S && G.S.pace === 2); }, get suspicion() { return save.campaign.suspicion; }, get counters() { return Object.keys(save.campaign.counters); }, get zones() { return G.S ? G.S.zones : save.campaign.zones; }, get paused() { return G.paused; }, get score() { return G.S ? Math.round(G.S.extracted) : 0; }, get time() { return G.S ? G.S.time : 0; },
+    get state() { return G.mode === 'title' ? 'title' : G.mode === 'opening' ? 'opening' : G.S.state; }, get phase() { return G.S ? G.S.phase : save.campaign.phase; }, get refined() { return G.S ? Math.floor(G.S.refined) : 0; }, get depth() { return G.S ? G.S.depth : 1; }, get lookout() { const w = G.S && G.S.workers.find((x) => x.job === 'lookout'); return w ? (G.S.lookoutCd > 0 ? 'paperwork' : 'ready') : null; }, get pushing() { return !!(G.S && G.S.pace === 2); }, get suspicion() { return save.campaign.suspicion; }, get counters() { return Object.keys(save.campaign.counters); }, get zones() { return G.S ? G.S.zones : save.campaign.zones; }, get paused() { return G.paused; }, get score() { return G.S ? Math.round(G.S.extracted) : 0; }, get time() { return G.S ? G.S.time : 0; },
     get bank() { return G.S ? Math.floor(G.S.bank) : 0; }, get workers() { return G.S ? G.S.workers.length : 0; }, get buildings() { return G.S ? G.S.buildings.length - 1 : 0; }, get casualties() { return G.S ? G.S.lost.length : 0; },
     get irritation() { return G.S ? G.S.irritation : 0; }, get night() { return G.S ? G.S.night : save.campaign.night; }, get founder() { return G.S ? G.S.founder.st : null; }, get belly() { return G.S ? G.S.founder.belly : 0; },
     get step() { return G.S && G.S.tut ? G.S.tut.step : null; }, get placing() { return G.placing; }, get unlocked() { return G.S ? G.S.unlocked.slice() : []; }, get sleepLeft() { return G.S ? G.S.shiftLen - G.S.sleepLost - G.S.time : 0; }, get fx() { return fxName(G.S); }, get cine() { return G.mode === 'opening' ? G.cineT : null; },

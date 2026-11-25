@@ -43,6 +43,7 @@
       }
     } else if (e.type === 'quotaMet') fx.flare = 1;
     else if (e.type === 'wake') label('6:30 AM', pal.accent, [11.0, 0.5, 3.4], 2.6, true);
+    else if (e.type === 'recall' && e.by === 'lookout') label('WHISTLE!', '#ff8a1f', [e.at[0], e.at[1], e.at[2] + 1.0], 1.4, true);
     else if (e.type === 'expand') { (ZONES[e.zone] || []).forEach((i, k) => { const p = PADS[i]; fx.parts.push({ kind: 'ring', x: p[0] + 1, y: p[1] + 0.9, z: 0, t: -k * 0.12, life: 0.7 }); }); }
     else if (e.type === 'hatch') {
       fx.parts.push({ kind: 'pop', x: e.at[0], y: e.at[1], z: 1.0, t: 0, life: 0.6, big: true });
@@ -88,6 +89,7 @@
       ctx.fillStyle = pal.bug; ctx.beginPath(); ctx.ellipse(-u * 0.5, u * 0.1, u * 0.9, u * 0.42, -0.25, 0, 7); ctx.fill(); ctx.beginPath(); ctx.arc(u * 0.55, -u * 0.25, u * 0.5, 0, 7); ctx.fill();
       ctx.strokeStyle = pal.bug; ctx.lineWidth = Math.max(1, u * 0.14); ctx.beginPath(); ctx.moveTo(u * 0.9, -u * 0.1); ctx.lineTo(u * 1.7, u * 0.5); ctx.stroke();
       if (o.belly) { ctx.fillStyle = pal.blood; ctx.beginPath(); ctx.ellipse(-u * 0.55, u * 0.12, u * (0.3 + 0.62 * o.belly), u * (0.16 + 0.36 * o.belly), -0.25, 0, 7); ctx.fill(); }
+      if (o.vest) { ctx.fillStyle = '#ff8a1f'; ctx.beginPath(); ctx.ellipse(-u * 0.35, u * 0.05, u * 0.62, u * 0.4, -0.25, 0, 7); ctx.fill(); ctx.fillStyle = '#f4f1ea'; ctx.fillRect(-u * 0.6, -u * 0.02, u * 0.5, u * 0.12); }
       if (o.mask) { ctx.fillStyle = '#eef0fa'; ctx.beginPath(); ctx.ellipse(u * 0.82, -u * 0.12, u * 0.26, u * 0.2, 0, 0, 7); ctx.fill(); ctx.strokeStyle = '#eef0fa'; ctx.lineWidth = Math.max(1, u * 0.08); ctx.beginPath(); ctx.moveTo(u * 0.6, -u * 0.2); ctx.lineTo(u * 0.2, -u * 0.35); ctx.stroke(); }
       if (o.founder) { ctx.fillStyle = pal.accent; ctx.beginPath(); ctx.ellipse(u * 0.5, -u * 0.62, u * 0.62, u * 0.26, -0.2, 0, 7); ctx.fill(); ctx.beginPath(); ctx.arc(u * 0.62, -u * 0.86, u * 0.12, 0, 7); ctx.fill(); ctx.fillStyle = pal.primary; ctx.fillRect(u * 0.1, u * 0.05, u * 0.34, u * 0.42); }
       else { ctx.fillStyle = o.hat || pal.hat; ctx.beginPath(); ctx.arc(u * 0.55, -u * 0.42, u * 0.52, Math.PI, 0); ctx.fill(); ctx.fillRect(u * 0.0, -u * 0.5, u * 1.25, u * 0.16); }
@@ -126,13 +128,13 @@
       if (waking && wk < 0.8) { const cp = P(11.08, 0.6, 2.5); ctx.strokeStyle = rgba(pal.accent, 0.9); ctx.lineWidth = 2; for (let i = 0; i < 3; i++) { const rr = s * (0.6 + i * 0.45 + ((t * 2) % 0.45)); ctx.beginPath(); ctx.arc(cp[0], cp[1], rr, -2.4, -0.7); ctx.stroke(); } glow(cp, s * 2.4, pal.accent, 0.35); } }
     box(0.55, 0.9, 0, 0.45, 5.2, 5.9, pal.wood);
     // HQ: a bottle cap under the bed, and the first light in the house
-    { const n = [NEST[0], NEST[1]], cap = Math.max(1, d.cap), fill = clamp(S.bank / cap, 0, 1), on = activeGlow * (cine === null ? 1 : clamp((cine - 11) / 2, 0.15, 1));
+    { const n = [NEST[0], NEST[1]], cap = Math.max(1, d.cap), fill = clamp(MA.sim.raw(S) / cap, 0, 1), on = activeGlow * (cine === null ? 1 : clamp((cine - 11) / 2, 0.15, 1));
       ell(P(n[0], n[1], 0), s * 0.9, s * 0.42, 'rgba(0,0,0,.25)');
       const c = cyl(n[0], n[1], 0, 0.5, 0.32, '#c7463a', shade('#c7463a', 1.25));
       for (let i = 0; i < 14; i++) { const a = (i / 14) * Math.PI; ctx.fillStyle = shade('#c7463a', 0.7); ctx.fillRect(c.a[0] - c.rx * Math.cos(a) - 1, c.a[1] + c.ry * Math.sin(a) - s * 0.3, 2, s * 0.3); }
       ell(c.b, c.rx * 0.8, c.ry * 0.8, shade(pal.metalDark, 1.2));
-      if (S.bank > 0.5 && d.counts.tank === 0) ell(c.b, c.rx * 0.8 * (0.35 + 0.65 * fill), c.ry * 0.8 * (0.35 + 0.65 * fill), pal.blood);
-      else if (S.bank > 0.5) ell(c.b, c.rx * 0.8, c.ry * 0.8, pal.blood);
+      if (MA.sim.raw(S) > 0.5 && d.counts.tank === 0) ell(c.b, c.rx * 0.8 * (0.35 + 0.65 * fill), c.ry * 0.8 * (0.35 + 0.65 * fill), pal.blood);
+      else if (MA.sim.raw(S) > 0.5) ell(c.b, c.rx * 0.8, c.ry * 0.8, pal.blood);
       box(n[0] + 0.35, n[1] - 0.35, 0.3, 0.05, 0.05, 1.5, shade(pal.wood, 1.3)); box(n[0] + 0.38, n[1] - 0.35, 1.32, 0.05, 0.55, 0.4, pal.primary, [1.1, 0.95, 0.8]);
       glow(P(n[0], n[1], 0.6), s * 2.2, pal.glow, 0.32 * on);
       if (S.queued > 0 && d.counts.tank === 0) tag(c.b[0], c.b[1] - s * 1.6, 'STORAGE FULL', pal.accent);
@@ -206,7 +208,7 @@
     const items = [];
     const drop = (b) => { const k = clamp((S.time - b.born) / (FEEL.build_drop_ms / 1000), 0, 1); return fx.reduced ? 0 : (1 - k) * (1 - k) * 4; };
     for (const b of S.buildings) {
-      if (b.type === 'nest' || b.type === 'windbreak' || b.type === 'masks') continue; // drawn with the fan, and on the staff
+      if (b.type === 'nest' || b.type === 'windbreak' || b.type === 'masks' || b.type === 'lookout') continue; // drawn with the fan, and on the staff
       if (b.type === 'drip') {
         const dp = MA.sim.storePoint(b, S);
         items.push({ d: dp[0] + dp[1] + 0.5, f: () => { const dz = drop(b); box(dp[0] - 0.08, dp[1] - 0.08, dz, 0.16, 0.16, dp[2] - 0.35, pal.metal); cyl(dp[0], dp[1], dz + dp[2] - 0.4, 0.42, 0.45, pal.pipe, flowing ? pal.blood : shade(pal.pipe, 0.6)); if (flowing && !fx.reduced) glow(P(dp[0], dp[1], dp[2]), s * 0.9, pal.blood, 0.25); if (opt.selected === b.id) sel(dp[0] - 0.6, dp[1] - 0.6, 1.2, 1.2); } });
@@ -221,7 +223,7 @@
         const dz = drop(b), lv = b.level;
         ell(P(x + 1, y + 0.9, 0), s * 1.7, s * 0.8, 'rgba(0,0,0,.2)');
         if (b.type === 'tank') {
-          const r = 0.74 + lv * 0.06, h = 1.7 + lv * 0.45, c = cyl(x + 1, y + 0.9, dz, r, h, pal.metal), fill = clamp(S.bank / Math.max(1, d.cap), 0, 1);
+          const r = 0.74 + lv * 0.06, h = 1.7 + lv * 0.45, c = cyl(x + 1, y + 0.9, dz, r, h, pal.metal), fill = clamp(MA.sim.raw(S) / Math.max(1, d.cap), 0, 1);
           const w = c.rx * 0.5, hh = h * s * 0.66, x0 = c.a[0] - w * 0.2, y0 = c.a[1] - h * s * 0.18 - hh;
           ctx.fillStyle = shade(pal.metalDark, 0.8); ctx.fillRect(x0, y0, w, hh); ctx.fillStyle = pal.blood; ctx.fillRect(x0, y0 + hh * (1 - fill), w, hh * fill); ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(x0 + w * 0.12, y0 + hh * 0.06, w * 0.16, hh * 0.88);
           glow([x0 + w / 2, y0 + hh * 0.7], s * 1.1, pal.blood, 0.12 + fill * 0.2);
@@ -273,6 +275,13 @@
       const l = P(2.7, 5.47, 0.4); ell(l, s * 0.07, s * 0.07, away ? '#5a6b5e' : '#7be38f'); if (!away) glow(l, s * 0.6, '#7be38f', 0.4);
     } });
 
+    // Occupational Health & Safety: a perch on the bed rail above the bite, with a sign
+    if (S.buildings.some((b) => b.type === 'lookout') && !away) { const lp = MA.sim.lookoutPoint(S), lvl = S.buildings.find((b) => b.type === 'lookout').level;
+      items.push({ d: lp[0] + lp[1] + 4, f: () => {
+        box(lp[0] - 0.25, lp[1] - 0.2, lp[2] - 0.15, 0.5, 0.4, 0.1, shade(pal.wood, 1.25), [1.1, 0.85, 0.7]);
+        box(lp[0] + 0.3, lp[1] - 0.15, lp[2] - 0.15, 0.05, 0.05, 0.9, pal.metal); box(lp[0] + 0.33, lp[1] - 0.15, lp[2] + 0.45, 0.04, 0.5, 0.3, lvl >= 2 ? '#54c08a' : '#ff8a1f', [1.1, 0.95, 0.8]);
+      } }); }
+
     // the gate sign and the plant manager on his crate
     if (S.corp) items.push({ d: 0.4 + 11.3 + 2, f: () => { box(0.5, 11.3, 0, 0.1, 0.1, 1.2, pal.metal); box(2.5, 11.3, 0, 0.1, 0.1, 1.2, pal.metal); box(0.4, 11.25, 1.0, 2.3, 0.14, 1.0, pal.primary); const a = P(1.55, 11.39, 1.48); ctx.save(); ctx.translate(a[0], a[1]); ctx.transform(1, 0.5, 0, 1, 0, 0); ctx.fillStyle = pal.metalDark; ctx.font = `${s * 0.74}px ${FONT_D}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('M&A', 0, 0); ctx.restore(); ctx.textBaseline = 'alphabetic'; } });
     if (S.corp) items.push({ d: 3.3 + 10.9 + 1.2, f: () => {
@@ -297,7 +306,7 @@
     for (const w of ws) {
       const bob = fx.reduced ? 0 : Math.sin(t * 5 + w.id) * 0.06, station = w.job !== 'extract';
       const flip = w.to && w.from ? (w.to[0] - w.to[1]) < (w.from[0] - w.from[1]) : w.st === 'bite' ? S.site === 'arm' : w.id % 2 === 0;
-      mosq([w.pos[0], w.pos[1], w.pos[2] + bob], clamp(40 / s, 1.4, 2.1), { carry: w.carry > 0 || (w.job === 'refine' && refining && Math.sin(t * 3 + w.id) > 0.2), flip, ph: w.id, mask: masked, grounded: w.st === 'bite', hat: w.job === 'hatch' ? '#f4f1ea' : w.job === 'refine' ? '#ff9d4d' : pal.hat });
+      mosq([w.pos[0], w.pos[1], w.pos[2] + bob], clamp(40 / s, 1.4, 2.1), { carry: w.carry > 0 || (w.job === 'refine' && refining && Math.sin(t * 3 + w.id) > 0.2), flip, ph: w.id, vest: w.job === 'lookout', mask: masked, grounded: w.st === 'bite', hat: w.job === 'lookout' ? '#ff8a1f' : w.job === 'hatch' ? '#f4f1ea' : w.job === 'refine' ? '#ff9d4d' : pal.hat });
     }
     // Rhonda: the beret, the lanyard, and a belly that fills while you hold
     { const f = S.founder, fp = cine !== null ? cinePath(cine) : f.pos;
@@ -322,6 +331,7 @@
     }
     if (C2.repellent && !away && S.state === 'playing') { const k = sitePos(S).skin, c = P(k[0], k[1], k[2] - 0.6); glow(c, s * 2.8, '#7be38f', 0.22 + (fx.reduced ? 0 : 0.06 * Math.sin(t * 1.5))); }
 
+    { const lw = S.workers.find((w) => w.job === 'lookout'); if (lw && !away && S.state === 'playing' && S.lookoutCd > 0) { const p = P(lw.pos[0] - 0.6, lw.pos[1], lw.pos[2] + 2.6); tag(p[0], p[1], `FORM 7-B · ${Math.ceil(S.lookoutCd)}s`, pal.text); } }
     // the hand
     if (S.hev && (S.hev.kind === 'swat' || S.hev.kind === 'scratch') && !waking) {
       const e = S.hev, big = e.kind === 'swat', p = clamp(e.t / e.telegraph, 0, 1), sk = site.skin, after = e.t - e.telegraph;
@@ -379,7 +389,7 @@
   function sitePos(S) { return SITES[S.site]; }
   function pick(v, S, px, py) {
     let best = null, bd = Math.max(30, v.s * 2.2);
-    for (const b of S.buildings) { if (b.type === 'nest' || b.type === 'windbreak' || b.type === 'masks') continue; const c = b.type === 'rig' ? [SITES[S.site].rig[0] + 0.6, SITES[S.site].rig[1] + 0.5] : b.type === 'drip' ? MA.sim.storePoint(b, S) : MA.sim.padCenter(b); const p = project(v, c[0], c[1], 0.9); const dd = Math.hypot(p[0] - px, p[1] - py); if (dd < bd) { bd = dd; best = b; } }
+    for (const b of S.buildings) { if (b.type === 'nest' || b.type === 'windbreak' || b.type === 'masks') continue; const c = b.type === 'lookout' ? MA.sim.lookoutPoint(S) : b.type === 'rig' ? [SITES[S.site].rig[0] + 0.6, SITES[S.site].rig[1] + 0.5] : b.type === 'drip' ? MA.sim.storePoint(b, S) : MA.sim.padCenter(b); const p = project(v, c[0], c[1], 0.9); const dd = Math.hypot(p[0] - px, p[1] - py); if (dd < bd) { bd = dd; best = b; } }
     return best;
   }
 
