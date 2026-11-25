@@ -6,11 +6,12 @@
   const C = MA.config;
 
   const V1_KEY = 'murders-acquisitions.v1', V2_KEY = 'murders-acquisitions.v2';
-  const PLACEABLE = ['tank', 'pool', 'refinery'], SINGLES = ['rig', 'drip', 'windbreak', 'masks', 'lookout'];
+  const PLACEABLE = ['tank', 'pool', 'refinery'], SINGLES = ['rig', 'drip', 'windbreak', 'masks', 'lookout', 'seminar', 'plant'];
 
   function newCampaign() {
-    return { night: 1, phase: 'night', divisions: ['arm'], bank: 0, refined: 0, zones: 1, suspicion: 0, counters: {}, newCounter: null, buildings: [], workers: [], lost: [], nextId: 1, hires: 0, unlocks: [], totals: { extracted: 0, nights: 0 }, history: [] };
+    return { night: 1, phase: 'night', divisions: ['arm'], gmPolicy: {}, host: { n: 1, start: 1 }, hostTotals: freshTotals(), booking: null, grace: 0, rehire: 0, leaseEnded: false, leases: [], bank: 0, refined: 0, zones: 1, suspicion: 0, counters: {}, newCounter: null, buildings: [], workers: [], lost: [], nextId: 1, hires: 0, unlocks: [], totals: { extracted: 0, nights: 0 }, history: [] };
   }
+  function freshTotals() { return { extracted: 0, lost: 0, fumigations: 0, cancelled: 0, best: 0, hired: 0 }; }
   function defaults() { return { v: 2, settings: { muted: false, seenOpening: false }, campaign: newCampaign(), archive: null }; }
 
   // ---------- validation: storage is user-editable, so nothing is trusted on the way in ----------
@@ -60,6 +61,14 @@
     if (c.zones > 1 && !c.unlocks.includes('floor')) c.unlocks.push('floor');
     c.refined = Math.min(c.bank, num(raw.refined, 0, 1e7));
     c.suspicion = num(raw.suspicion, 0, 100);
+    // the host lifecycle: which host this is, and the night their lease started. A save from before leases starts one now
+    const h = raw.host && typeof raw.host === 'object' ? raw.host : null;
+    c.host = h ? { n: Math.max(1, int(h.n, 1, 999)), start: Math.min(c.night, Math.max(1, int(h.start, 1, 9999))) } : { n: 1, start: c.night };
+    const ht = raw.hostTotals && typeof raw.hostTotals === 'object' ? raw.hostTotals : {}; c.hostTotals = freshTotals(); for (const k of Object.keys(c.hostTotals)) c.hostTotals[k] = num(ht[k], 0);
+    c.booking = Number.isInteger(raw.booking) && raw.booking >= c.night - 1 && raw.booking <= c.night + 3 ? raw.booking : null;
+    c.grace = int(raw.grace, 0, 9); c.rehire = int(raw.rehire, 0, 9); c.leaseEnded = raw.leaseEnded === true;
+    c.leases = (Array.isArray(raw.leases) ? raw.leases.slice(-20) : []).filter((x) => x && typeof x === 'object').map((x) => ({ n: Math.max(1, int(x.n, 1, 999)), nights: int(x.nights, 0, 99), extracted: int(x.extracted, 0), lost: int(x.lost, 0, 1e5), fumigations: int(x.fumigations, 0, 99) }));
+    const gp = raw.gmPolicy && typeof raw.gmPolicy === 'object' ? raw.gmPolicy : {}; c.gmPolicy = {}; for (const id of c.divisions) if (['lie', 'standard', 'aggressive'].includes(gp[id])) c.gmPolicy[id] = gp[id];
     c.newCounter = c.phase === 'day' && C.ECON.counters.some((k) => k.id === raw.newCounter) ? raw.newCounter : null;
     const ct = raw.counters && typeof raw.counters === 'object' ? raw.counters : {};
     for (const k of C.ECON.counters) if (ct[k.id] === true) { c.counters[k.id] = true; if (!c.unlocks.includes(k.answer)) c.unlocks.push(k.answer); }
@@ -105,28 +114,83 @@
   // the colony as a night or a day left it: buildings, staff, blood, what has been learned
   function snapshot(camp, S) {
     return {
-      night: camp.night, phase: camp.phase, newCounter: camp.newCounter, suspicion: camp.suspicion, counters: camp.counters, bank: S.bank, refined: S.refined, zones: S.zones,
+      night: camp.night, phase: camp.phase, newCounter: camp.newCounter, suspicion: camp.suspicion, counters: camp.counters, host: camp.host, hostTotals: camp.hostTotals, booking: camp.booking, grace: camp.grace, rehire: camp.rehire, leaseEnded: camp.leaseEnded, leases: camp.leases, bank: S.bank, refined: S.refined, zones: S.zones,
       divisions: S.divOrder.slice(),
       buildings: S.buildings.filter((b) => b.type !== 'nest').map((b) => Object.assign({ type: b.type, level: b.level, pad: b.pad }, b.div ? { div: b.div } : {})),
-      workers: S.workers.map((w) => ({ id: w.id, name: w.name, trait: w.trait, bio: w.bio, larvae: w.larvae, loads: w.loads, since: w.since, div: w.div })),
+      workers: S.workers.map((w) => ({ id: w.id, name: w.name, trait: w.trait, bio: w.bio, larvae: w.larvae, loads: w.loads, since: w.since, div: w.lent || w.div })), // staff lent for the night go home
+      gmPolicy: Object.assign({}, S.gmPolicy),
       lost: camp.lost.concat(S.lost.map((w) => ({ name: w.name, trait: w.trait, larvae: w.larvae, night: camp.night, cause: w.cause }))),
       nextId: S.nextId, hires: S.hires, unlocks: S.unlocked.slice(), totals: camp.totals, history: camp.history,
     };
   }
-  // dawn: a finished night becomes the next day. Unrefined blood clots, and the first clot is what unlocks the refinery
-  function fold(camp, S, report) {
-    const n = snapshot(camp, S);
+  const E = () => C.ECON;
+  // what happened this morning, for the morning screen: attached to the campaign but never saved
+  function withNews(camp, news) { Object.defineProperty(camp, 'news', { value: news, enumerable: false, configurable: true }); return camp; }
+  // the night of the current host's lease (1..14)
+  function leaseNight(camp) { return camp.night - camp.host.start + 1; }
+  // dawn: a finished night becomes the next day. Unrefined blood clots (the first clot unlocks the refinery); he takes stock of
+  // what he noticed; he may buy a countermeasure, book an exterminator, cancel one, or have the bedroom fumigated
+  function dawn(camp, S, report) {
+    const n = snapshot(camp, S), ec = E(), news = { suspicion: null, fumigation: null, booking: null, cancelled: false, leaseEnded: false };
     n.night = camp.night + 1; n.phase = 'day'; n.bank = Math.max(0, S.bank - report.clotted); n.refined = Math.min(n.bank, S.refined);
     if (report.clotted > 0 && !n.unlocks.includes('refinery')) n.unlocks.push('refinery');
-    // he takes stock over breakfast: at most one new countermeasure a morning, then he forgets a little during the day
-    let sus = Math.min(100, camp.suspicion + report.suspicion); n.counters = Object.assign({}, camp.counters); n.newCounter = null;
-    const next = C.ECON.counters.find((k) => !n.counters[k.id]);
+    // suspicion: what he noticed last night, then he forgets some of it during the day (more, the more there is to forget)
+    const before = camp.suspicion, raw = before + report.suspicion, sus = Math.min(100, raw);
+    n.counters = Object.assign({}, camp.counters); n.newCounter = null;
+    const next = ec.counters.find((k) => !n.counters[k.id]);
     if (next && sus >= next.at) { n.counters[next.id] = true; n.unlocks.push(next.answer); n.newCounter = next.id; }
-    n.suspicion = Math.max(0, sus - C.ECON.suspicionDailyForget);
+    const forget = Math.min(sus, ec.suspicionForgetBase + ec.suspicionForgetShare * sus);
+    let after = Math.max(0, sus - forget);
+    // the exterminator: booked when he hits 100%, three nights' notice; on the day he cancels if suspicion has fallen far enough
+    n.booking = camp.booking; n.grace = Math.max(0, camp.grace - 1); n.rehire = Math.max(0, camp.rehire - 1);
+    if (n.booking !== null && camp.night >= n.booking) {
+      n.booking = null;
+      if (sus < ec.cancelBelow) { news.cancelled = true; n.hostTotals = Object.assign({}, camp.hostTotals, { cancelled: camp.hostTotals.cancelled + 1 }); }
+      else { news.fumigation = fumigate(n, report); after = ec.fumigatedSuspicion; n.grace = ec.fumigationGrace; n.rehire = ec.rehireNights; }
+    } else if (n.booking === null && n.grace === 0 && raw >= ec.bookAt) { n.booking = camp.night + ec.warningNights; news.booking = n.booking; }
+    n.suspicion = after;
+    news.suspicion = { before, parts: report.susParts, gain: report.suspicion, raw, forget, after, next, booking: n.booking };
+    const ht = Object.assign({}, n.hostTotals || camp.hostTotals); ht.extracted += report.extracted; ht.lost += report.lost.length + (news.fumigation ? news.fumigation.lost.length : 0); ht.best = Math.max(ht.best, report.extracted); ht.hired += report.hires; if (news.fumigation) ht.fumigations++;
+    n.hostTotals = ht;
     n.totals = { extracted: camp.totals.extracted + report.extracted, nights: camp.totals.nights + 1 };
-    n.history = [{ night: camp.night, extracted: report.extracted, staff: report.staff, lost: report.lost.length, hires: report.hires, clotted: report.clotted, suspicion: Math.round(Math.min(100, camp.suspicion + report.suspicion)) }].concat(camp.history);
-    return cleanCampaign(n);
+    n.history = [{ night: camp.night, extracted: report.extracted, staff: report.staff, lost: report.lost.length, hires: report.hires, clotted: report.clotted, suspicion: Math.round(sus) }].concat(camp.history);
+    // the lease: after the host's 14th night, the annual report
+    if (leaseNight(camp) >= ec.leaseNights) { n.leaseEnded = true; news.leaseEnded = true; }
+    return withNews(cleanCampaign(n), news);
   }
+  function fold(camp, S, report) { return dawn(camp, S, report); }
+  // fumigation (a "workforce restructuring"): staff go, last hired first, more from the most exposed division; the raw blood
+  // in the tanks is gone; every pool loses a level. Rhonda, the GMs and the lookouts were in a meeting
+  function fumigate(n, report) {
+    const ec = E(), protectedIds = new Set();
+    for (const id of n.divisions) {
+      const mine = n.workers.filter((w) => w.div === id).sort((a, b) => a.id - b.id), execs = (n.buildings.some((b) => b.type === 'lookout' && b.div === id) ? 1 : 0) + (n.divisions.length > 1 ? 1 : 0);
+      mine.slice(0, execs).forEach((w) => protectedIds.add(w.id));
+    }
+    const staff = n.workers.filter((w) => !protectedIds.has(w.id)), cut = Math.round(staff.length * ec.fumigationStaffShare);
+    const exposure = {}; for (const p of report.susParts || []) if (p.key === 'bites') exposure[p.div] = p.v; const total = Object.values(exposure).reduce((a, v) => a + v, 0) || 1;
+    // each division's share of the cut follows its share of the exposure
+    // (blended half and half with its share of the staff, so one short night cannot hand the whole cut to one division)
+    const share = (id) => 0.5 * (exposure[id] || 0) / total + 0.5 * staff.filter((w) => w.div === id).length / Math.max(1, staff.length);
+    const quota = {}; let given = 0; n.divisions.forEach((id, i) => { quota[id] = i === n.divisions.length - 1 ? cut - given : Math.round(cut * share(id)); given += quota[id]; });
+    const gone = [];
+    for (const id of n.divisions) { const pool = staff.filter((w) => w.div === id).sort((a, b) => b.id - a.id); gone.push(...pool.slice(0, Math.max(0, quota[id]))); }
+    while (gone.length < cut) { const w = staff.filter((x) => !gone.includes(x)).sort((a, b) => b.id - a.id)[0]; if (!w) break; gone.push(w); }
+    n.workers = n.workers.filter((w) => !gone.includes(w));
+    n.lost = n.lost.concat(gone.map((w) => ({ name: w.name, trait: w.trait, larvae: w.larvae, night: n.night - 1, cause: 'fumigation' })));
+    const rawLost = Math.max(0, Math.round(n.bank - n.refined)); n.bank = n.refined;
+    let pools = 0; for (const b of n.buildings) if (b.type === 'pool' && b.level > 1) { b.level--; pools++; }
+    return { lost: gone.map((w) => ({ name: w.name, div: w.div })), byDiv: n.divisions.map((id) => ({ id, lost: gone.filter((w) => w.div === id).length })), raw: rawLost, pools, executives: protectedIds.size };
+  }
+  // the lease is up: the company moves with him. Same staff, same company, a new host who has never seen a mosquito
+  function relocate(camp) {
+    const n = JSON.parse(JSON.stringify(camp)), ec = E();
+    n.leases = camp.leases.concat([{ n: camp.host.n, nights: leaseNight(camp) - 1, extracted: camp.hostTotals.extracted, lost: camp.hostTotals.lost, fumigations: camp.hostTotals.fumigations }]);
+    n.host = { n: camp.host.n + 1, start: camp.night }; n.hostTotals = freshTotals(); n.leaseEnded = false;
+    n.suspicion = 0; n.counters = {}; n.newCounter = null; n.booking = null; n.grace = 0; n.rehire = 0; n.phase = 'day';
+    const out = cleanCampaign(n); return withNews(out, { relocated: out.host.n });
+  }
+
   // the next countermeasure he has not bought yet, if any
   function nextCounter(camp) { return C.ECON.counters.find((k) => !camp.counters[k.id]) || null; }
   // a day (no clock, no host) saves what was built; nightfall hands the colony to the next night
@@ -146,6 +210,6 @@
     return out.slice(0, 3);
   }
 
-  MA.campaign = { V1_KEY, V2_KEY, newCampaign, defaults, fromSave, migrateV1, cleanCampaign, fold, foldDay, nextCounter, plan, nightLength };
+  MA.campaign = { V1_KEY, V2_KEY, newCampaign, defaults, fromSave, migrateV1, cleanCampaign, fold, dawn, relocate, fumigate, leaseNight, foldDay, nextCounter, plan, nightLength };
   if (typeof module !== 'undefined') module.exports = MA;
 })(typeof window !== 'undefined' ? window : globalThis);

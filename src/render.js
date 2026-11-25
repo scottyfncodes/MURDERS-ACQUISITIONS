@@ -5,7 +5,8 @@
   const FONT_D = "'Alfa Slab One', Rockwell, serif", FONT_B = "Archivo, system-ui, sans-serif";
 
   function shade(hex, f) {
-    const n = parseInt(hex.slice(1), 16); let r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+    let r, g, b; // a hex colour, or an rgb() this function made
+    if (hex[0] === '#') { const n = parseInt(hex.slice(1), 16); r = n >> 16; g = (n >> 8) & 255; b = n & 255; } else [r, g, b] = (hex.match(/\d+/g) || [0, 0, 0]).map(Number);
     if (f < 1) { r *= f; g *= f; b *= f; } else { const k = f - 1; r += (255 - r) * k; g += (255 - g) * k; b += (255 - b) * k; }
     return `rgb(${r | 0},${g | 0},${b | 0})`;
   }
@@ -89,6 +90,7 @@
       ctx.fillStyle = pal.bug; ctx.beginPath(); ctx.ellipse(-u * 0.5, u * 0.1, u * 0.9, u * 0.42, -0.25, 0, 7); ctx.fill(); ctx.beginPath(); ctx.arc(u * 0.55, -u * 0.25, u * 0.5, 0, 7); ctx.fill();
       ctx.strokeStyle = pal.bug; ctx.lineWidth = Math.max(1, u * 0.14); ctx.beginPath(); ctx.moveTo(u * 0.9, -u * 0.1); ctx.lineTo(u * 1.7, u * 0.5); ctx.stroke();
       if (o.belly) { ctx.fillStyle = pal.blood; ctx.beginPath(); ctx.ellipse(-u * 0.55, u * 0.12, u * (0.3 + 0.62 * o.belly), u * (0.16 + 0.36 * o.belly), -0.25, 0, 7); ctx.fill(); }
+      if (o.tie) { ctx.fillStyle = pal.shirt; ctx.beginPath(); ctx.ellipse(-u * 0.35, u * 0.02, u * 0.6, u * 0.38, -0.25, 0, 7); ctx.fill(); ctx.fillStyle = pal.blood; ctx.beginPath(); ctx.moveTo(u * 0.1, -u * 0.15); ctx.lineTo(u * 0.28, -u * 0.15); ctx.lineTo(u * 0.22, u * 0.35); ctx.lineTo(u * 0.16, u * 0.35); ctx.closePath(); ctx.fill(); }
       if (o.vest) { ctx.fillStyle = '#ff8a1f'; ctx.beginPath(); ctx.ellipse(-u * 0.35, u * 0.05, u * 0.62, u * 0.4, -0.25, 0, 7); ctx.fill(); ctx.fillStyle = '#f4f1ea'; ctx.fillRect(-u * 0.6, -u * 0.02, u * 0.5, u * 0.12); }
       if (o.mask) { ctx.fillStyle = '#eef0fa'; ctx.beginPath(); ctx.ellipse(u * 0.82, -u * 0.12, u * 0.26, u * 0.2, 0, 0, 7); ctx.fill(); ctx.strokeStyle = '#eef0fa'; ctx.lineWidth = Math.max(1, u * 0.08); ctx.beginPath(); ctx.moveTo(u * 0.6, -u * 0.2); ctx.lineTo(u * 0.2, -u * 0.35); ctx.stroke(); }
       if (o.founder) { ctx.fillStyle = pal.accent; ctx.beginPath(); ctx.ellipse(u * 0.5, -u * 0.62, u * 0.62, u * 0.26, -0.2, 0, 7); ctx.fill(); ctx.beginPath(); ctx.arc(u * 0.62, -u * 0.86, u * 0.12, 0, 7); ctx.fill(); ctx.fillStyle = pal.primary; ctx.fillRect(u * 0.1, u * 0.05, u * 0.34, u * 0.42); }
@@ -185,15 +187,11 @@
       [4.74, 4.96, 5.18].forEach((x) => { const a = P(x, 6.5, top - len - 0.7), b = P(x, 6.5, top - len - 0.25); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); });
       if (armOut > 0.9) [[4.8, 3.6], [5.1, 2.9], [4.9, 2.2]].slice(0, clamp(Math.ceil(S.extracted / 300), 0, 3)).forEach(([x, z]) => ell(P(x, 6.42, z), s * 0.07, s * 0.07, pal.blood));
     }
-    if (footOut > 0.02 && !gone) {
-      const len = 2.7 * footOut, top = 4.5;
-      box(10.0, 3.0, top - len, 0.42, 0.72, len, pal.skin);
-      box(10.0, 2.9, top - len - 0.5, 0.95, 0.92, 0.5, pal.skin, [1.04, 0.84, 0.66]);
-    }
-    if (S.covered > 0 && !waking) { const k = clamp(Math.min(S.covered, 0.6) / 0.6, 0, 1); if (S.site === 'arm') box(4.3, 6.0, 4.4 - 3.4 * k, 1.3, 0.56, 3.4 * k, pal.blanket, [1.1, 0.9, 0.7]); else box(10.0, 2.7, 4.4 - 3.2 * k, 0.56, 1.3, 3.2 * k, pal.blanket, [1.1, 0.9, 0.7]); }
+    const FD = S.divisions && S.divisions.foot, fh = FD && FD.hev, kickOff = fh && fh.kind === 'kick' && !waking ? (fh.hit ? Math.max(0, 1 - (fh.t - fh.telegraph) / 0.5) * 0.9 : fx.reduced ? 0 : Math.sin(fh.t * 50) * 0.06) : 0;
+    for (const D of MA.sim.divs(S)) if (D.covered > 0 && !waking && D.site === 'arm') { const k = clamp(Math.min(D.covered, 0.6) / 0.6, 0, 1); box(4.3, 6.0, 4.4 - 3.4 * k, 1.3, 0.56, 3.4 * k, pal.blanket, [1.1, 0.9, 0.7]); }
 
     // pipes on the floor, then everything standing on it in depth order
-    const site = SITES[S.site], rig = S.buildings.find((b) => b.type === 'rig'), center = MA.sim.padCenter;
+    const site = SITES[S.site], center = MA.sim.padCenter, siteOf = (b) => SITES[MA.sim.divOf(S, b).site];
     const tanks = S.buildings.filter((b) => b.type === 'tank'), pools = S.buildings.filter((b) => b.type === 'pool'), refs = S.buildings.filter((b) => b.type === 'refinery'), hats = S.buildings.filter((b) => b.type === 'hatchery');
     const flowing = (S.biting || 0) > 0 ? 1 : 0, refining = (S.refineRate || 0) > 0.05 ? 1 : 0;
     const L = (a, b, z, flow) => pipe([[a[0], a[1], z], [a[0], b[1], z], [b[0], b[1], z]], flow);
@@ -202,20 +200,27 @@
     S.buildings.filter((b) => b.type === 'refinery').forEach((b) => { const c = center(b); L(nearTank(c), c, 0.22, refining); });
     const drip = S.buildings.find((b) => b.type === 'drip');
     if (drip) { const dp = MA.sim.storePoint(drip, S); L([dp[0], dp[1]], nearTank(dp), 0.3, flowing); }
-    if (rig) { const st = MA.sim.storePoint(MA.sim.nearestStore(S), S); pipe([[site.skin[0], site.skin[1] + 0.3, 1.2], [site.rig[0] + 1.2, site.rig[1] + 0.9, 1.2], [site.rig[0] + 1.2, site.rig[1] + 0.9, 0.18], [site.rig[0] + 1.2, st[1], 0.18], [st[0], st[1], 0.18]], flowing); }
+    for (const rig of S.buildings.filter((b) => b.type === 'rig')) { const D = MA.sim.divOf(S, rig), rs = siteOf(rig); if (D.offline) continue; const st = MA.sim.storePoint(MA.sim.nearestStore(S, false, D), S), fl = D.biting > 0 ? 1 : 0; pipe([[rs.skin[0], rs.skin[1] + 0.3, 1.2], [rs.rig[0] + 1.2, rs.rig[1] + 0.9, 1.2], [rs.rig[0] + 1.2, rs.rig[1] + 0.9, 0.18], [rs.rig[0] + 1.2, st[1], 0.18], [st[0], st[1], 0.18]], fl); }
+    S.buildings.filter((b) => b.type === 'plant').forEach((b) => { const pp = MA.sim.storePoint(b, S); L([pp[0], pp[1]], nearTank(pp), 0.26, refining); });
 
     if (fx.flare > 0 && !fx.reduced) { const c0 = P(6.5, 6.4, 1.2); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.translate(c0[0], c0[1]); ctx.rotate(t * 0.5); for (let i = 0; i < 12; i++) { ctx.rotate(Math.PI / 6); const g = ctx.createLinearGradient(0, 0, s * 13, 0); g.addColorStop(0, rgba(pal.primary, 0.3 * fx.flare)); g.addColorStop(1, rgba(pal.primary, 0)); ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(s * 13, -s * 1.2); ctx.lineTo(s * 13, s * 1.2); ctx.closePath(); ctx.fill(); } ctx.restore(); }
     const items = [];
     const drop = (b) => { const k = clamp((S.time - b.born) / (FEEL.build_drop_ms / 1000), 0, 1); return fx.reduced ? 0 : (1 - k) * (1 - k) * 4; };
     for (const b of S.buildings) {
-      if (b.type === 'nest' || b.type === 'windbreak' || b.type === 'masks' || b.type === 'lookout') continue; // drawn with the fan, and on the staff
+      if (b.type === 'nest' || b.type === 'windbreak' || b.type === 'masks' || b.type === 'lookout' || b.type === 'seminar') continue; // drawn with the fan, on the staff, on the perch
+      if (b.type === 'plant') {
+        const pp = MA.sim.storePoint(b, S), lv = b.level;
+        items.push({ d: pp[0] + pp[1] + 0.8, f: () => { const dz = drop(b), x = pp[0] - 0.6, y = pp[1] - 0.6, h = 1.0 + lv * 0.25; ell(P(pp[0], pp[1], 0), s * 1.1, s * 0.5, 'rgba(0,0,0,.2)'); box(x, y, dz, 1.2, 1.2, h, pal.metal); winL(x + 0.15, x + 1.05, y + 1.2, dz + 0.35, dz + h - 0.25, refining ? pal.glow : shade(pal.metalDark, 1.4)); box(x - 0.05, y - 0.05, dz + h, 1.3, 1.3, 0.1, pal.accent, [1.1, 0.9, 0.75]); const ch = cyl(x + 0.9, y + 0.3, dz + h + 0.1, 0.16, 0.5 + lv * 0.2, pal.metal); if (refining && !fx.reduced) { const q = (t * 0.35) % 1; ctx.globalAlpha = (1 - q) * 0.4; ell([ch.b[0], ch.b[1] - s * 0.2 - q * s * 1.4], s * (0.18 + q * 0.3), s * (0.15 + q * 0.25), pal.steam); ctx.globalAlpha = 1; } if (opt.selected === b.id) sel(x, y, 1.2, 1.2); } });
+        continue;
+      }
       if (b.type === 'drip') {
         const dp = MA.sim.storePoint(b, S);
         items.push({ d: dp[0] + dp[1] + 0.5, f: () => { const dz = drop(b); box(dp[0] - 0.08, dp[1] - 0.08, dz, 0.16, 0.16, dp[2] - 0.35, pal.metal); cyl(dp[0], dp[1], dz + dp[2] - 0.4, 0.42, 0.45, pal.pipe, flowing ? pal.blood : shade(pal.pipe, 0.6)); if (flowing && !fx.reduced) glow(P(dp[0], dp[1], dp[2]), s * 0.9, pal.blood, 0.25); if (opt.selected === b.id) sel(dp[0] - 0.6, dp[1] - 0.6, 1.2, 1.2); } });
         continue;
       }
       if (b.type === 'rig') {
-        items.push({ d: site.rig[0] + site.rig[1], f: () => { const [x, y] = site.rig, dz = drop(b), h = 1.3 + b.level * 0.22, w = 1.0 + b.level * 0.1; [[0, 0], [w, 0], [0, 0.9], [w, 0.9]].forEach(([ox, oy]) => box(x + ox, y + oy, dz, 0.14, 0.14, h, pal.metal)); box(x - 0.1, y - 0.1, dz + h, w + 0.34, 1.14, 0.12, pal.metal, [1.3, 1, 0.8]); for (let i = 0; i < b.level; i++) box(x + 0.1 + i * 0.3, y + 0.2, dz + h + 0.12, 0.2, 0.2, 0.26, pal.primary); if (opt.selected === b.id) sel(x, y, w + 0.3, 1.1); } });
+        const rs = siteOf(b); if (MA.sim.divOf(S, b).offline) continue;
+        items.push({ d: rs.rig[0] + rs.rig[1], f: () => { const [x, y] = rs.rig, dz = drop(b), h = 1.3 + b.level * 0.22, w = 1.0 + b.level * 0.1; [[0, 0], [w, 0], [0, 0.9], [w, 0.9]].forEach(([ox, oy]) => box(x + ox, y + oy, dz, 0.14, 0.14, h, pal.metal)); box(x - 0.1, y - 0.1, dz + h, w + 0.34, 1.14, 0.12, pal.metal, [1.3, 1, 0.8]); for (let i = 0; i < b.level; i++) box(x + 0.1 + i * 0.3, y + 0.2, dz + h + 0.12, 0.2, 0.2, 0.26, pal.primary); if (opt.selected === b.id) sel(x, y, w + 0.3, 1.1); } });
         continue;
       }
       const p = PADS[b.pad], x = p[0], y = p[1];
@@ -275,12 +280,29 @@
       const l = P(2.7, 5.47, 0.4); ell(l, s * 0.07, s * 0.07, away ? '#5a6b5e' : '#7be38f'); if (!away) glow(l, s * 0.6, '#7be38f', 0.4);
     } });
 
+    // the foot: an ankle out from under the blanket at the end of the bed, heel on the mattress, toes to the ceiling.
+    // It slides out as he rolls; kicks jerk it, rubs bring the other foot over, socks (the blanket) cover it
+    const footD = S.divisions && Object.values(S.divisions).find((D) => D.site === 'foot');
+    if (footOut > 0.02 && !gone) items.push({ d: 10.4 + 3.4 + 3, f: () => {
+      const x0 = 8.9 + 1.15 * footOut, kx = kickOff * 0.6, kz = kickOff * 0.5;
+      box(9.0, 2.98, 4.45, x0 - 9.0 + kx, 0.86, 0.6, pal.skin);                                       // the ankle
+      box(x0 + kx, 2.86, 4.4 + kz, 0.42, 1.06, 1.3, pal.skin, [1.04, 0.84, 0.66]);                   // the sole, upright
+      [0, 1, 2, 3, 4].forEach((i) => box(x0 + kx + 0.03, 2.9 + i * 0.2, 5.7 + kz - i * 0.06, 0.3, 0.18, 0.26 - i * 0.02, pal.skin, [1.12, 0.9, 0.72])); // toes
+      const cov = footD && footD.covered > 0 && !waking ? clamp(Math.min(footD.covered, 0.6) / 0.6, 0, 1) : 0;
+      if (cov > 0) box(8.9, 2.75, 4.45, 1.7 * cov, 1.3, 1.35, pal.blanket, [1.1, 0.9, 0.7]);
+      if (fh && !waking && fh.kind === 'rub') { // the other foot: under the blanket, then over for a rub
+        const p = clamp(fh.t / fh.telegraph, 0, 1), yy = fh.hit ? 2.05 + Math.sin((fh.t - fh.telegraph) * 18) * 0.22 : 1.15 + p * 0.85;
+        box(9.0, yy, 4.45, 1.0, 0.7, 0.48, pal.skin, [0.94, 0.76, 0.6]); box(10.0, yy - 0.05, 4.4, 0.32, 0.8, 0.98, pal.skin, [0.96, 0.78, 0.6]);
+      }
+    } });
     // Occupational Health & Safety: a perch on the bed rail above the bite, with a sign
-    if (S.buildings.some((b) => b.type === 'lookout') && !away) { const lp = MA.sim.lookoutPoint(S), lvl = S.buildings.find((b) => b.type === 'lookout').level;
+    for (const lb of away ? [] : S.buildings.filter((b) => b.type === 'lookout')) { const lp = MA.sim.lookoutPoint(S, MA.sim.divOf(S, lb)), lvl = lb.level;
       items.push({ d: lp[0] + lp[1] + 4, f: () => {
         box(lp[0] - 0.25, lp[1] - 0.2, lp[2] - 0.15, 0.5, 0.4, 0.1, shade(pal.wood, 1.25), [1.1, 0.85, 0.7]);
         box(lp[0] + 0.3, lp[1] - 0.15, lp[2] - 0.15, 0.05, 0.05, 0.9, pal.metal); box(lp[0] + 0.33, lp[1] - 0.15, lp[2] + 0.45, 0.04, 0.5, 0.3, lvl >= 2 ? '#54c08a' : '#ff8a1f', [1.1, 0.95, 0.8]);
       } }); }
+    // each General Manager's podium on the bed rail
+    for (const w of away ? [] : S.workers.filter((x) => x.job === 'gm')) { const gp = MA.sim.gmPoint(S, MA.sim.divOf(S, w)); items.push({ d: gp[0] + gp[1] + 4, f: () => { box(gp[0] - 0.22, gp[1] - 0.2, gp[2] - 0.45, 0.44, 0.4, 0.32, pal.primary, [1.1, 0.9, 0.75]); } }); }
 
     // the gate sign and the plant manager on his crate
     if (S.corp) items.push({ d: 0.4 + 11.3 + 2, f: () => { box(0.5, 11.3, 0, 0.1, 0.1, 1.2, pal.metal); box(2.5, 11.3, 0, 0.1, 0.1, 1.2, pal.metal); box(0.4, 11.25, 1.0, 2.3, 0.14, 1.0, pal.primary); const a = P(1.55, 11.39, 1.48); ctx.save(); ctx.translate(a[0], a[1]); ctx.transform(1, 0.5, 0, 1, 0, 0); ctx.fillStyle = pal.metalDark; ctx.font = `${s * 0.74}px ${FONT_D}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('M&A', 0, 0); ctx.restore(); ctx.textBaseline = 'alphabetic'; } });
@@ -305,8 +327,8 @@
     const ws = S.workers.slice().sort((a, b) => a.pos[0] + a.pos[1] - b.pos[0] - b.pos[1]);
     for (const w of ws) {
       const bob = fx.reduced ? 0 : Math.sin(t * 5 + w.id) * 0.06, station = w.job !== 'extract';
-      const flip = w.to && w.from ? (w.to[0] - w.to[1]) < (w.from[0] - w.from[1]) : w.st === 'bite' ? S.site === 'arm' : w.id % 2 === 0;
-      mosq([w.pos[0], w.pos[1], w.pos[2] + bob], clamp(40 / s, 1.4, 2.1), { carry: w.carry > 0 || (w.job === 'refine' && refining && Math.sin(t * 3 + w.id) > 0.2), flip, ph: w.id, vest: w.job === 'lookout', mask: masked, grounded: w.st === 'bite', hat: w.job === 'lookout' ? '#ff8a1f' : w.job === 'hatch' ? '#f4f1ea' : w.job === 'refine' ? '#ff9d4d' : pal.hat });
+      const flip = w.to && w.from ? (w.to[0] - w.to[1]) < (w.from[0] - w.from[1]) : w.st === 'bite' ? MA.sim.divOf(S, w).site === 'arm' : w.id % 2 === 0;
+      mosq([w.pos[0], w.pos[1], w.pos[2] + bob], clamp(40 / s, 1.4, 2.1), { carry: w.carry > 0 || (w.job === 'refine' && refining && Math.sin(t * 3 + w.id) > 0.2), flip, ph: w.id, vest: w.job === 'lookout', tie: w.job === 'gm', mask: masked, grounded: w.st === 'bite', hat: w.job === 'gm' ? pal.metalDark : w.job === 'lookout' ? '#ff8a1f' : w.job === 'hatch' ? '#f4f1ea' : w.job === 'refine' ? '#ff9d4d' : pal.hat });
     }
     // Rhonda: the beret, the lanyard, and a belly that fills while you hold
     { const f = S.founder, fp = cine !== null ? cinePath(cine) : f.pos;
@@ -331,15 +353,15 @@
     }
     if (C2.repellent && !away && S.state === 'playing') { const k = sitePos(S).skin, c = P(k[0], k[1], k[2] - 0.6); glow(c, s * 2.8, '#7be38f', 0.22 + (fx.reduced ? 0 : 0.06 * Math.sin(t * 1.5))); }
 
-    { const lw = S.workers.find((w) => w.job === 'lookout'); if (lw && !away && S.state === 'playing' && S.lookoutCd > 0) { const p = P(lw.pos[0] - 0.6, lw.pos[1], lw.pos[2] + 2.6); tag(p[0], p[1], `FORM 7-B · ${Math.ceil(S.lookoutCd)}s`, pal.text); } }
-    // the hand
-    if (S.hev && (S.hev.kind === 'swat' || S.hev.kind === 'scratch') && !waking) {
-      const e = S.hev, big = e.kind === 'swat', p = clamp(e.t / e.telegraph, 0, 1), sk = site.skin, after = e.t - e.telegraph;
+    for (const lw of away || S.state !== 'playing' ? [] : S.workers.filter((w) => w.job === 'lookout')) { const D = MA.sim.divOf(S, lw); if (D.lookoutCd <= 0) continue; const p = P(lw.pos[0] + 0.35, lw.pos[1], lw.pos[2] + 1.1), u = Math.max(5, s * 0.32); ctx.fillStyle = '#c99a5a'; ctx.fillRect(p[0] - u * 0.7, p[1] - u, u * 1.4, u * 1.8); ctx.fillStyle = pal.pillow; ctx.fillRect(p[0] - u * 0.55, p[1] - u * 0.75, u * 1.1, u * 1.4); ctx.fillStyle = pal.metal; ctx.fillRect(p[0] - u * 0.3, p[1] - u * 1.1, u * 0.6, u * 0.3); ctx.fillStyle = pal.metalDark; for (let i = 0; i < 3; i++) ctx.fillRect(p[0] - u * 0.4, p[1] - u * 0.4 + i * u * 0.35, u * (i === 2 ? 0.45 : 0.8), u * 0.08); }
+    // the hand, at whichever division it threatens
+    for (const HD of MA.sim.divs(S)) if (HD.hev && (HD.hev.kind === 'swat' || HD.hev.kind === 'scratch') && !waking) {
+      const e = HD.hev, big = e.kind === 'swat', p = clamp(e.t / e.telegraph, 0, 1), sk = SITES[HD.site].skin, after = e.t - e.telegraph;
       const sp = P(sk[0], sk[1] + 0.6, 0.02); ell(sp, s * (0.6 + p * (big ? 1.8 : 1.0)), s * (0.3 + p * (big ? 0.9 : 0.5)), `rgba(0,0,0,${0.12 + p * 0.3})`);
       const fall = p < 0.82 ? 0 : (p - 0.82) / 0.18, lift = e.hit ? clamp((after - e.hold * 0.45) / (e.hold * 0.55), 0, 1) : 0;
       const hz = e.hit ? sk[2] - 1.4 + lift * 9 : sk[2] + 7.2 - fall * fall * 8.6 + (fx.reduced ? 0 : Math.sin(e.t * 26) * 0.12 * (1 - fall)), w = big ? 2.4 : 1.4, wig = e.hit && !big ? Math.sin(after * 22) * 0.25 : 0;
       const fl = big ? 1.1 : 0.7, ph = big ? 1.7 : 1.0, fw = w / 4, hs = [1.05, 0.88, 0.7], crease = shade(pal.skin, 0.6);
-      if (S.site === 'arm') {
+      if (HD.site === 'arm') {
         const x0 = sk[0] - w / 2 + wig;
         box(x0, 6.42, hz + fl, w, 0.55, ph, pal.skin, hs); box(x0 + w, 6.5, hz + fl + ph * 0.3, 0.45, 0.4, ph * 0.5, pal.skin, hs);
         for (let i = 0; i < 4; i++) box(x0 + i * fw + 0.03, 6.42, hz + (i === 0 || i === 3 ? 0.18 : 0), fw - 0.06, 0.55, fl - (i === 0 || i === 3 ? 0.18 : 0), pal.skin, hs);
@@ -355,6 +377,11 @@
       else if (after < 0.25 && big && !fx.reduced) { const ip = P(sk[0], sk[1] + 0.5, sk[2]); ctx.strokeStyle = rgba(pal.text, 1 - after * 4); ctx.lineWidth = 3; for (let i = 0; i < 10; i++) { const a = (i / 10) * 6.283, r0 = s * (1.6 + after * 6), r1 = r0 + s * 0.9; ctx.beginPath(); ctx.moveTo(ip[0] + Math.cos(a) * r0, ip[1] + Math.sin(a) * r0 * 0.7); ctx.lineTo(ip[0] + Math.cos(a) * r1, ip[1] + Math.sin(a) * r1 * 0.7); ctx.stroke(); } }
     }
 
+    // the foot's hazards: the other foot comes over for a rub; a kick jerks the foot
+    if (fh && !waking && (fh.kind === 'rub' || fh.kind === 'kick')) {
+      const sk = SITES.foot.skin;
+      if (!fh.hit) { const q = 0.5 + 0.5 * Math.sin(fh.t * 20), wp = P(sk[0], sk[1], sk[2] + 3.4); tag(wp[0], wp[1], fh.kind === 'kick' ? 'KICK INCOMING' : 'RUB INCOMING', q > 0.5 ? pal.primary : pal.text); }
+    }
     // particles and floating labels
     fx.parts = fx.parts.filter((q) => (q.t += dt) < q.life);
     for (const q of fx.parts) {
@@ -389,7 +416,7 @@
   function sitePos(S) { return SITES[S.site]; }
   function pick(v, S, px, py) {
     let best = null, bd = Math.max(30, v.s * 2.2);
-    for (const b of S.buildings) { if (b.type === 'nest' || b.type === 'windbreak' || b.type === 'masks') continue; const c = b.type === 'lookout' ? MA.sim.lookoutPoint(S) : b.type === 'rig' ? [SITES[S.site].rig[0] + 0.6, SITES[S.site].rig[1] + 0.5] : b.type === 'drip' ? MA.sim.storePoint(b, S) : MA.sim.padCenter(b); const p = project(v, c[0], c[1], 0.9); const dd = Math.hypot(p[0] - px, p[1] - py); if (dd < bd) { bd = dd; best = b; } }
+    for (const b of S.buildings) { if (b.type === 'nest' || b.type === 'windbreak' || b.type === 'masks') continue; const c = b.type === 'seminar' ? null : b.type === 'lookout' ? MA.sim.lookoutPoint(S, MA.sim.divOf(S, b)) : b.type === 'plant' ? MA.sim.storePoint(b, S) : b.type === 'rig' ? [SITES[MA.sim.divOf(S, b).site].rig[0] + 0.6, SITES[MA.sim.divOf(S, b).site].rig[1] + 0.5] : b.type === 'drip' ? MA.sim.storePoint(b, S) : MA.sim.padCenter(b); if (!c) continue; const p = project(v, c[0], c[1], 0.9); const dd = Math.hypot(p[0] - px, p[1] - py); if (dd < bd) { bd = dd; best = b; } }
     return best;
   }
 

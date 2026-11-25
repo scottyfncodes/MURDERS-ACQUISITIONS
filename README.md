@@ -32,6 +32,19 @@ There is no build step and there are no dependencies.
 - **Days** have no clock and no host: he is at work. Build and upgrade, then tap **Nightfall** (N).
 - New cards appear when the operation hits a wall: a crowded arm (**Extraction rig**), long flights to storage after he
   rolls over (**Drip line**), a full floor (**Floor space**). With no floor left, a card upgrades the cheapest building.
+- At 100% **suspicion** he books an **exterminator** three nights out. If suspicion is under 70% that morning he
+  cancels; otherwise the bedroom is fumigated (a "workforce restructuring": 40% of non-executive staff, newest first,
+  all raw blood, one level off every pool; suspicion drops to 40%, three nights' grace, half-price rehiring for two).
+  The morning report itemises suspicion: bites per division, each disturbance, bodies found, and what he forgot.
+- **Acquisitions**: once the arm's rig is maxed (night 3+), the board offers **the foot** (5,000 mL). A second division
+  with no staff and no infrastructure: bigger, slower bites, less itch, rubs and kicks instead of scratches and swats,
+  and socks (the blanket) three times a night. When he rolls onto the arm, the arm goes dark and lends its crew to the foot.
+- With two divisions each gets a **General Manager** (its longest-serving employee) who runs it to a policy (lie low,
+  standard, aggressive) while you are on the other floor. Tap the **staff plate** (Tab) to change floors. A
+  **Leadership Seminar** shortens how late a GM reads his sleep; a **Processing plant** gives the foot its own storage
+  and refining. Scatter covers both floors.
+- **The lease**: 14 nights per host, then the annual report and relocation to a fresh host. Staff, buildings,
+  divisions and blood move; his suspicion, purchases and any booking do not.
 - The colony, its staff and its stored blood carry over from night to night.
 - B holds the bite on a keyboard; P pauses, M mutes.
 
@@ -48,7 +61,9 @@ There is no build step and there are no dependencies.
 | `tests/sim.test.js` | Headless simulation and save checks: `node tests/sim.test.js` |
 | `tests/balance.js` | Balance report, careful vs reckless with and without a lookout: `node tests/balance.js [nights] [seeds]` |
 | `tests/bot.js` | The test players (a human-paced night bot and a campaign runner) |
-| `tests/regression.js` | Golden regression against `tests/golden/baseline.json` (recorded from the PR #6 code), including loading old saves: `node tests/regression.js` |
+| `tests/acquisitions.test.js` | The foot, GMs and policies, the plant, the roll, suspicion, the exterminator, the lease: `node tests/acquisitions.test.js` |
+| `tests/strategies.js` | Strategy simulations over a lease (never acquire, untrained/trained/aggressive GMs, lying low, hands-on, reckless): `node tests/strategies.js [nights] [seeds]` |
+| `tests/regression.js` | Golden regression against `tests/golden/baseline.json` (`--write` re-records it after an intentional balance change); `tests/golden/pr6-saves.json` holds saves written before divisions existed, checked by `sim.test.js` |
 | `art-direction/` | The approved look and the shot list |
 
 Progress is saved under `murders-acquisitions.v2`. A save from the earlier one-shift game (`murders-acquisitions.v1`)

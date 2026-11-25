@@ -105,7 +105,18 @@ body.is-day .plate { background: rgba(28, 36, 72, .9); }
 .held li { background: var(--surface); border-radius: 10px; padding: 8px 12px; font-size: var(--t-s); line-height: 1.4; border-left: 4px solid var(--accent); }
 .held li span { display: block; color: var(--primary); font-weight: 700; margin-top: 2px; }
 .held li.none { border-left-color: #54c08a; }
-.sus { font-size: var(--t-s); color: var(--muted); } .sus.alarm { color: var(--accent); font-weight: 700; }
+.sus { font-size: var(--t-s); color: var(--muted); }
+#p-staff.switch { cursor: pointer; position: relative; } #p-staff.switch small::after { content: ' \21C4'; color: var(--primary); }
+#p-staff small i { font-style: normal; } @media (max-width: 479px) { #p-staff.switch small i.wide { display: none; } }
+#p-staff.switch.alert { border-color: var(--accent); animation: alarm .35s infinite alternate; }
+.divs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; } .divs div { background: var(--surface); border-radius: 10px; padding: 8px 10px; font-size: var(--t-s); line-height: 1.35; }
+.divs b { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); } .divs strong { font-family: var(--display); font-weight: 400; color: var(--primary); font-size: 17px; }
+.susbox h3, .restructure h3 { font-size: var(--t-xs); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+.susbox ul { list-style: none; padding: 0; margin: 4px 0 6px; display: grid; gap: 2px; font-size: var(--t-s); }
+.susbox li { display: flex; justify-content: space-between; gap: 12px; } .susbox li i { font-style: normal; font-variant-numeric: tabular-nums; font-weight: 700; }
+.susbox li.minus i { color: #54c08a; } .susbox li.total { border-top: 1px solid var(--line); padding-top: 3px; margin-top: 2px; font-weight: 700; }
+.restructure { display: grid; gap: 8px; background: rgba(238, 68, 85, .1); border: 1px solid rgba(238, 68, 85, .45); border-radius: 12px; padding: 10px 12px; } .restructure p { font-size: var(--t-s); }
+.card.gmpol small { color: var(--primary); font-weight: 700; } .sus.alarm { color: var(--accent); font-weight: 700; }
 .recall { flex: 1 1 auto; max-width: 340px; min-height: 52px; padding: 0 12px; border-radius: 10px; background: var(--surface); border: 1.5px solid var(--line); font-family: var(--display); font-size: 17px; letter-spacing: .05em; white-space: nowrap; color: var(--text); position: relative; overflow: hidden; }
 .recall.cooling { color: var(--muted); }
 .recall { min-width: 0; }
@@ -206,6 +217,7 @@ body.is-cine .title { display: none; }
 .payroll ul, .plan ul { list-style: none; padding: 0; margin-top: 4px; display: grid; gap: 3px; font-size: var(--t-s); }
 .payroll p { margin-top: 4px; font-size: var(--t-s); line-height: 1.45; }
 .plan li { padding-left: 16px; position: relative; } .plan li::before { content: ''; position: absolute; left: 2px; top: .55em; width: 6px; height: 6px; border-radius: 2px; background: var(--primary); }
+#annual-grid { grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); } #annual-grid div { min-width: 0; } #annual-grid dt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .review-grid div { background: var(--surface); border-radius: 10px; padding: 8px 10px; }
 .review-grid dt { font-size: 11px; letter-spacing: .08em; font-weight: 700; color: var(--muted); text-transform: uppercase; }
 .review-grid dd { margin: 0; font-family: var(--display); font-size: 17px; white-space: nowrap; color: var(--primary); font-variant-numeric: tabular-nums; }

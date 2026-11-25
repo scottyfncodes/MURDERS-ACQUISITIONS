@@ -4,6 +4,7 @@
   const MA = window.MA, C = MA.config, sim = MA.sim, R = MA.render, audio = MA.audio, K = MA.campaign;
   const $ = (id) => document.getElementById(id);
   const fmt = (n) => Math.round(n).toLocaleString('en-US');
+  const HZ = C.HAZARDS, multi = (S) => S && S.divOrder.length > 1, hazardAt = (S, D) => D.hev && !D.hev.hit && HZ[D.hev.kind];
   const errorBox = $('error');
   function fail(msg) { errorBox.textContent = `Something went wrong: ${msg}. Reload to pick up from the start of this night.`; errorBox.hidden = false; }
   window.addEventListener('error', (e) => fail(e.message || 'unknown error'));
@@ -31,7 +32,7 @@
   // ---------- night lifecycle ----------
   function clockIn() {
     audio.start(); audio.play('click');
-    if (!save.settings.seenOpening && save.campaign.night === 1) startOpening(); else if (save.campaign.phase === 'day') startDay(); else startNight();
+    if (!save.settings.seenOpening && save.campaign.night === 1) startOpening(); else if (save.campaign.leaseEnded) showAnnual(); else if (save.campaign.phase === 'day') startDay(); else startNight();
   }
   function startOpening() {
     G.mode = 'opening'; G.cineT = 0; G.S = sim.newNight(save.campaign, {}); G.S.events.length = 0; G.cam = null;
@@ -46,7 +47,8 @@
   function startDay() {
     G.S = sim.newNight(save.campaign, { day: true }); resetPlay(); document.body.classList.add('morning', 'is-day');
     for (const k of C.ECON.counters) if (G.S.counters[k.id] && !G.S.buildings.some((b) => b.type === k.answer)) fresh.add(k.answer); // what he bought is answered first
-    $('nightfall').hidden = false; $('recall').hidden = true; G.dayAt = performance.now() / 1000; renderPanel(); drainEvents(); updateHud(0, performance.now() / 1000);
+    $('nightfall').hidden = false; $('recall').hidden = true; G.dayAt = performance.now() / 1000; renderPanel(); drainEvents();
+    const nw = save.campaign.news; if (nw) { const add = (text, tone) => { G.memoQ.push({ text, tone }); }; if (nw.relocated) add(C.NOTES.relocated(nw.relocated), 'good'); if (nw.fumigation) add(C.MORNING.restructureNote, 'loss'); if (nw.booking) add(C.MORNING.booked, 'warn'); if (nw.cancelled) add(C.MORNING.cancelled, 'good'); G.memoUntil = 0; } updateHud(0, performance.now() / 1000);
   }
   function nightfall() {
     if (!G.S || G.S.phase !== 'day') return; audio.play('click');
@@ -65,7 +67,8 @@
   function toTitle() { G.mode = 'title'; G.S = null; G.demo = makeDemo(); G.cam = null; closeModal(); document.body.classList.add('is-title'); document.body.classList.remove('morning', 'is-cine', 'is-day'); $('hud').hidden = true; $('cine').hidden = true; titleStatus(); }
   function titleStatus() {
     const c = save.campaign;
-    $('title-status').textContent = c.night === 1 && !c.workers.length ? 'Night 1 · Subject asleep since 11:42 PM' : c.phase === 'day' ? `Day ${c.night - 1} · He is at work · ${c.workers.length} on payroll` : `Night ${c.night} · ${c.workers.length} on payroll · ${fmt(c.bank)} mL stored`;
+    const k = K.leaseNight(c), L = C.ECON.leaseNights;
+    $('title-status').textContent = c.night === 1 && !c.workers.length ? 'Night 1 · Subject asleep since 11:42 PM' : c.leaseEnded ? 'The lease is up · annual report' : c.phase === 'day' && k <= 1 ? `Moving day · Host #${c.host.n} · ${c.workers.length} on payroll` : c.phase === 'day' ? `Day ${k - 1} of ${L} · He is at work · ${c.workers.length} on payroll` : `Night ${k} of ${L} · ${c.workers.length} on payroll · ${fmt(c.bank)} mL stored`;
   }
 
   // ---------- the opening ----------
@@ -120,8 +123,9 @@
       return;
     }
     types.forEach((type, i) => {
+      if (type === 'policy') { const pol = S.gmPolicy[S.focus] || 'standard', b = document.createElement('button'); b.type = 'button'; b.className = 'card gmpol'; b.id = 'build-policy'; b.title = C.NOTES.policyHint[pol]; b.innerHTML = `<b>GM · ${C.DIVISIONS[S.focus].short}</b><small>${C.NOTES.policyName[pol]}</small><span>Tap to change</span>`; b.addEventListener('click', cyclePolicy); p.append(b); return; }
       const def = C.BUILDINGS[type], b = document.createElement('button'); b.type = 'button'; b.className = 'card'; b.id = `build-${type}`;
-      b.innerHTML = `<b>${def.name}</b><small>${def.gain}</small><span></span>`; b.title = `${def.blurb} (${i + 1})`;
+      b.innerHTML = `<b>${divTag(S, type) ? def.short + divTag(S, type) : def.name}</b><small>${def.gain}</small><span></span>`; b.title = `${def.blurb} (${i + 1})`;
       if (fresh.has(type)) b.classList.add('fresh');
       b.addEventListener('click', () => pickCard(type)); p.append(b); cards[type] = b;
     });
@@ -129,22 +133,27 @@
     const neu = types.find((t) => fresh.has(t)); if (neu && cards[neu]) cards[neu].scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: R.fx.reduced ? 'auto' : 'smooth' });
   }
   // a card goes away once there is nothing left to buy (the floor, the drip line)
-  function visibleCards(S) { return C.BUILD_ORDER.filter((t) => S.unlocked.includes(t) && !((C.BUILDINGS[t].expand || C.BUILDINGS[t].maxLevel === 1) && sim.costOf(S, t) === Infinity)); }
+  function visibleCards(S) {
+    const list = C.BUILD_ORDER.filter((t) => S.unlocked.includes(t) && !(C.BUILDINGS[t].acquiredOnly && sim.div(S) === sim.home(S)) && !((C.BUILDINGS[t].expand || C.BUILDINGS[t].maxLevel === 1 || C.BUILDINGS[t].acquire) && sim.costOf(S, t, S.focus) === Infinity));
+    return S.phase === 'day' && multi(S) ? ['policy'].concat(list) : list;
+  }
+  const divTag = (S, type) => (multi(S) && C.DIVISION_BUILDINGS.includes(type) ? ` · ${C.DIVISIONS[S.focus].short}` : '');
+  function cyclePolicy() { const S = G.S, order = ['lie', 'standard', 'aggressive'], cur = S.gmPolicy[S.focus] || 'standard'; sim.setPolicy(S, S.focus, order[(order.indexOf(cur) + 1) % 3]); audio.play('click'); saveDay(); G.cardsKey = ''; }
   function pickCard(type) {
     const S = G.S; if (!S || S.state !== 'playing') return; audio.start(); if (fresh.delete(type)) G.cardsKey = '';
-    const cost = sim.costOf(S, type);
+    const cost = sim.costOf(S, type, S.focus);
     if (!(cost <= S.bank)) { S.events.push({ type: 'deny', what: type, cost }); drainEvents(); return; }
-    if (C.BUILDINGS[type].single || !sim.freePads(S).length) { sim.build(S, type); drainEvents(); renderPanel(); return; }
+    if (C.BUILDINGS[type].single || C.BUILDINGS[type].acquire || !sim.freePads(S).length) { sim.build(S, type, null, S.focus); drainEvents(); renderPanel(); return; }
     audio.play('click'); G.selected = null; G.placing = type; renderPanel();
   }
   function placeAt(pad) { const S = G.S, type = G.placing; if (!S || !type) return; G.placing = null; sim.build(S, type, pad); drainEvents(); renderPanel(); }
   function updateCards() {
     const S = G.S, d = sim.derived(S);
     for (const type in cards) {
-      const def = C.BUILDINGS[type], cost = sim.costOf(S, type), el = cards[type];
-      const own = def.single ? (d.rigLevel ? `Lv ${d.rigLevel}` : 'new') : d.counts[type] ? `×${d.counts[type]}` : 'new';
+      const def = C.BUILDINGS[type], cost = sim.costOf(S, type, S.focus), el = cards[type], mine = def.single && S.buildings.find((b) => b.type === type && (!C.DIVISION_BUILDINGS.includes(type) || (b.div || 'arm') === S.focus));
+      const own = def.single ? (mine ? `Lv ${mine.level}` : 'new') : d.counts[type] ? `×${d.counts[type]}` : 'new';
       const up = !def.single && !sim.freePads(S).length && cost !== Infinity, price = cost === Infinity ? (def.single ? `Max · ${own}` : `Maxed · ${own}`) : up ? `Upgrade · ${fmt(cost)} mL` : `${fmt(cost)} mL · ${own}`;
-      const owned = def.single && S.buildings.some((b) => b.type === type), sub = up ? 'Upgrades the cheapest one' : owned && def.upgradeGain ? def.upgradeGain : def.gain; if (el._sub !== sub) { el._sub = sub; el.children[1].textContent = sub; }
+      const owned = !!mine, sub = up ? 'Upgrades the cheapest one' : owned && def.upgradeGain ? def.upgradeGain : def.gain; if (el._sub !== sub) { el._sub = sub; el.children[1].textContent = sub; }
       if (el._price !== price) { el._price = price; el.children[2].textContent = price; }
       el.classList.toggle('can', cost <= S.bank);
     }
@@ -173,12 +182,23 @@
   cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', release); cv.addEventListener('lostpointercapture', release);
 
   $('recall').addEventListener('click', () => { if (G.S) { sim.recall(G.S); drainEvents(); } });
+  function switchFloor() { const S = G.S; if (!S || !multi(S) || G.mode !== 'play') return; const order = S.divOrder, i = order.indexOf(S.focus); sim.setFocus(S, order[(i + 1) % order.length]); audio.play('click'); G.shown.pv = null; G.cardsKey = ''; G.selected = null; }
+  $('p-staff').addEventListener('click', switchFloor); $('p-staff').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); switchFloor(); } });
   function setPush(on) { if (!G.S || G.S.phase === 'day') return; sim.setPush(G.S, on); drainEvents(); }
   $('ease').addEventListener('click', () => setPush(false)); $('push').addEventListener('click', () => setPush(true));
   $('pause').addEventListener('click', () => setPaused(true)); $('resume').addEventListener('click', () => setPaused(false));
   $('mute').addEventListener('click', () => { save.settings.muted = !save.settings.muted; applyMute(); store(); });
   function applyMute() { audio.setMuted(save.settings.muted); $('mute').setAttribute('aria-pressed', String(save.settings.muted)); $('mute').setAttribute('aria-label', save.settings.muted ? 'Unmute sound' : 'Mute sound'); }
-  $('clock-in').addEventListener('click', clockIn); $('again').addEventListener('click', () => { audio.start(); audio.play('click'); startDay(); }); $('nightfall').addEventListener('click', nightfall); $('to-title').addEventListener('click', toTitle);
+  $('clock-in').addEventListener('click', clockIn); $('again').addEventListener('click', () => { audio.start(); audio.play('click'); if (save.campaign.leaseEnded) showAnnual(); else startDay(); });
+  // the annual report: the lease is over; the company moves with him to a new host
+  function showAnnual() {
+    const c = save.campaign, a = C.NOTES.annual(c.hostTotals, c.host.n);
+    $('annual-eyebrow').textContent = `Annual report · host #${c.host.n} · ${C.ECON.leaseNights} nights`; $('annual-h').textContent = a.title; $('annual-note').textContent = a.note;
+    const g = $('annual-grid'); g.innerHTML = ''; for (const [k, v] of a.grid) { const el = document.createElement('div'), dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = k; dd.textContent = v; el.append(dt, dd); g.append(el); }
+    $('annual-sub').textContent = `The company keeps its staff, buildings, divisions and blood. He keeps nothing: his successor has never seen a mosquito.`;
+    $('hud').hidden = true; document.body.classList.remove('is-title'); openModal('annual');
+  }
+  $('relocate').addEventListener('click', () => { audio.play('click'); save.campaign = K.relocate(save.campaign); store(); closeModal(); startDay(); }); $('nightfall').addEventListener('click', nightfall); $('to-title').addEventListener('click', toTitle);
   $('skip').addEventListener('click', (e) => { e.stopPropagation(); audio.start(); endOpening(); });
   $('cine').addEventListener('pointerdown', () => { audio.start(); endOpening(); });
   $('open-handbook').addEventListener('click', () => { audio.start(); audio.play('click'); openModal('handbook'); }); $('pause-handbook').addEventListener('click', () => openModal('handbook'));
@@ -196,6 +216,7 @@
     if (k === 'p') setPaused(!G.paused);
     else if (k === 'b' && inPlay()) sim.setHold(G.S, true);
     else if (k === 'f' && G.S && G.S.unlocked.includes('push')) setPush(G.S.pace !== 2);
+    else if (k === 'tab' && G.S && multi(G.S)) { e.preventDefault(); switchFloor(); }
     else if (k === ' ') { e.preventDefault(); if (G.S && G.S.unlocked.includes('scatter')) $('recall').click(); }
     else if (k === 'n' && G.S && G.S.phase === 'day') nightfall();
     else if (k >= '1' && k <= '6' && G.S) { const t = visibleCards(G.S)[Number(k) - 1]; if (t) pickCard(t); }
@@ -220,10 +241,12 @@
         case 'deliver': audio.play(e.founder ? 'plip' : 'plip', e.founder ? 0 : 0.09); if (e.first) audio.play('hatch'); if (e.founder) flash('p-bank', 'pulse'); break;
         case 'takeoff': audio.play('buzz', 0.2); break;
         case 'full': audio.play('click'); break;
-        case 'telegraph': if (e.kind === 'swat' || e.kind === 'scratch') { audio.play('warn'); $('recall').classList.add('alarm'); } break;
-        case 'impact': $('recall').classList.remove('alarm'); if (e.kind === 'swat' || e.kind === 'scratch') { audio.play('hit'); if (e.kind === 'swat' && !R.fx.reduced) G.hitStop = C.FEEL.hit_stop_ms / 1000; flash('p-clock', 'pulse'); if (e.dead.length) flash('p-staff', 'deny'); } break;
+        case 'telegraph': if (HZ[e.kind]) { audio.play('warn'); $('recall').classList.add('alarm'); } break;
+        case 'impact': $('recall').classList.remove('alarm'); if (HZ[e.kind]) { audio.play('hit'); if ((e.kind === 'swat' || e.kind === 'kick') && !R.fx.reduced && (!e.div || e.div === S.focus)) G.hitStop = C.FEEL.hit_stop_ms / 1000; flash('p-clock', 'pulse'); if (e.dead.length) flash('p-staff', 'deny'); } break;
         case 'recall': audio.play('whistle'); if (e.by === 'lookout') G.lookoutFlash = performance.now() / 1000; break;
         case 'push': audio.play(e.on ? 'buzz' : 'click'); break;
+        case 'acquire': audio.play('quota'); audio.play('stamp'); G.cardsKey = ''; G.focusCoachAt = performance.now() / 1000; saveDay(); break;
+        case 'lend': G.cardsKey = ''; break;
         case 'hatch': audio.play('hatch', 0.5); flash('p-staff', 'pulse');
           if (e.first) { audio.play('quota'); audio.play('stamp'); G.hireAt = performance.now() / 1000; if (!R.fx.reduced) { G.slow = 1.4; G.punch = { f: [e.at[0], e.at[1], 1.4], until: performance.now() / 1000 + 2.4 }; } }
           break;
@@ -238,22 +261,39 @@
   function finish() {
     const S = G.S, r = sim.report(S), before = save.campaign;
     save.campaign = K.fold(before, S, r); store();
-    $('review-eyebrow').textContent = `Night ${r.night} · 6:30 AM`; $('review-h').textContent = C.MORNING.headline(r); $('review-note').textContent = C.MORNING.note(r);
+    const news = save.campaign.news || {}, ln = K.leaseNight(Object.assign({}, before, { night: r.night }));
+    $('review-eyebrow').textContent = `${C.MORNING.lease(ln, C.ECON.leaseNights)} · 6:30 AM`; $('review-h').textContent = news.fumigation ? C.MORNING.restructureHead : C.MORNING.headline(r); $('review-note').textContent = news.fumigation ? C.MORNING.fumigatedNote : C.MORNING.note(r);
+    // after a restructuring the morning counts the company that is left, not the one that went to bed
+    const fum = news.fumigation, crew = fum ? save.campaign.workers : S.workers;
     $('r-extracted').textContent = `${fmt(r.extracted)} mL`; $('r-manual').textContent = `${fmt(r.manual)} mL`; $('r-auto').textContent = `${fmt(r.auto)} mL`;
-    $('r-banked').textContent = `${fmt(r.banked)} mL`; $('r-staff').textContent = String(r.staff); $('r-lost').textContent = String(r.lost.length);
-    const names = S.workers.map((w) => w.name), shown = names.slice(0, 6);
+    $('r-banked').textContent = `${fmt(fum ? save.campaign.bank : r.banked)} mL`; $('r-staff').textContent = String(crew.length); $('r-lost').textContent = String(r.lost.length + (fum ? fum.lost.length : 0));
+    const names = crew.map((w) => w.name), shown = names.slice(0, 6);
     $('r-staff-list').textContent = names.length > 6 ? `${shown.join(', ')} and ${names.length - 6} more.` : names.length > 1 ? `${shown.slice(0, -1).join(', ')} and ${shown[shown.length - 1]}.` : `${shown[0] || ''}.`;
-    $('r-payroll').hidden = S.workers.length === 0;
+    $('r-payroll').hidden = crew.length === 0;
     const list = $('r-lost-list'); list.innerHTML = ''; for (const w of r.lost) { const l = document.createElement('li'); l.textContent = `${w.name} `; const s = document.createElement('span'); s.textContent = `· ${w.trait} · supported ${w.larvae} larvae`; l.append(s); list.append(l); }
     $('r-memoriam').hidden = r.lost.length === 0;
     const clot = C.MORNING.clot(r); $('r-clot').hidden = !clot; $('r-clot').textContent = clot;
-    $('r-sus').hidden = false; const s0 = Math.min(100, before.suspicion + r.suspicion), nc = save.campaign.newCounter; $('r-sus').textContent = nc ? C.MORNING.bought(s0, nc) : C.MORNING.suspicion(s0, r.suspicion, K.nextCounter(before)); $('r-sus').classList.toggle('alarm', !!nc);
+    // each division's night, then the suspicion breakdown: where it came from, what he forgets, what happens next
+    const dv = $('r-divs'); dv.hidden = r.divisions.length < 2; dv.innerHTML = '';
+    for (const x of r.divisions) { const el = document.createElement('div'), b = document.createElement('b'), st = document.createElement('strong'), sp = document.createElement('span'); b.textContent = C.DIVISIONS[x.id].name; st.textContent = `${fmt(x.extracted)} mL`; sp.textContent = C.MORNING.divisionLine(fum ? Object.assign({}, x, { staff: crew.filter((w) => w.div === x.id).length }) : x).replace(/^[^·]+· /, ''); el.append(b, st, document.createElement('br'), sp); dv.append(el); }
+    const fm = news.fumigation; $('r-fum').hidden = !fm; if (fm) { $('r-fum-text').textContent = C.MORNING.restructure(fm); $('r-fum-note').textContent = C.MORNING.restructureNote; }
+    const sv = news.suspicion, sl = $('r-sus-list'); sl.innerHTML = '';
+    const row = (label, v, cls) => { const li = document.createElement('li'), i = document.createElement('i'); if (cls) li.className = cls; li.textContent = label; i.textContent = v; li.append(i); sl.append(li); };
+    if (sv) {
+      row('Yesterday', `${Math.round(sv.before)}%`);
+      for (const p of sv.parts) if (p.v >= 0.5) row(C.MORNING.susLabel(p), `+${Math.round(p.v)}`);
+      row(C.MORNING.susForget, `−${Math.round(sv.forget)}`, 'minus');
+      row(fm ? 'After the restructuring' : 'Today', `${Math.round(save.campaign.suspicion)}%`, 'total');
+    }
+    const nc = save.campaign.newCounter, bk = save.campaign.booking;
+    $('r-sus').textContent = news.cancelled ? C.MORNING.cancelled : nc ? C.MORNING.bought(sv ? sv.raw : 0, nc) : C.MORNING.susStatus({ booking: bk !== null, nightsLeft: bk !== null ? bk - r.night + 0 : 0, cancelBelow: C.ECON.cancelBelow, next: K.nextCounter(save.campaign) });
+    $('r-sus').classList.toggle('alarm', !!nc || bk !== null);
     // what held us back: the most expensive causes first, each with what would fix it
     const hl = $('r-held-list'), held = C.MORNING.held(r); hl.innerHTML = '';
     if (!held.length) { const li = document.createElement('li'); li.className = 'none'; li.textContent = C.MORNING.heldNone; hl.append(li); }
     for (const h of held) { const li = document.createElement('li'), sp = document.createElement('span'); li.textContent = h.text; sp.textContent = h.fix; li.append(sp); hl.append(li); }
-    const plan = $('r-plan'); plan.innerHTML = ''; K.plan(save.campaign).forEach((t) => { const l = document.createElement('li'); l.textContent = t; plan.append(l); });
-    $('again').textContent = 'START THE DAY'; $('hud').hidden = true;
+    const plan = $('r-plan'); plan.innerHTML = ''; (save.campaign.leaseEnded ? [C.NOTES.leaseOver] : K.plan(save.campaign)).forEach((t) => { const l = document.createElement('li'); l.textContent = t; plan.append(l); });
+    $('again').textContent = save.campaign.leaseEnded ? 'READ THE ANNUAL REPORT' : 'START THE DAY'; $('hud').hidden = true;
     openModal('review'); $('review').setAttribute('data-ready', '');
   }
 
@@ -262,8 +302,9 @@
   const set = (id, v) => { if (G.shown[id] !== v) { G.shown[id] = v; $(id).textContent = v; } };
   const show = (id, on) => { const k = 'vis-' + id; if (G.shown[k] !== on) { G.shown[k] = on; $(id).hidden = !on; if (on) flash(id, 'arrive'); } };
   function coachText(S, now) {
-    const f = S.founder, tut = S.tut, scatter = S.hev && !S.hev.hit && (S.hev.kind === 'swat' || S.hev.kind === 'scratch') && S.unlocked.includes('scatter');
-    if (scatter && (S.hev.tutorial || S.night <= 2)) return ['Press SCATTER!', 'alarm'];
+    const f = S.founder, tut = S.tut, threat = sim.divs(S).find((D) => hazardAt(S, D)), scatter = threat && S.unlocked.includes('scatter');
+    if (scatter && (threat.hev.tutorial || S.night <= 2 || (multi(S) && threat.id !== S.focus))) return [multi(S) ? `${C.DIVISIONS[threat.id].short}: ${threat.hev.kind}! SCATTER` : 'Press SCATTER!', 'alarm'];
+    if (multi(S) && G.focusCoachAt !== undefined && now - G.focusCoachAt < 9) return [C.NOTES.focusCoach];
     if (G.flashCoach && now < G.flashCoach.until) return [G.flashCoach.text, 'warn'];
     if (G.placing) return null;
     if (S.phase === 'day') return S.night === 2 && now - G.dayAt < 9 ? ['No clock while he is at work. Build, then tap Nightfall.'] : null;
@@ -296,11 +337,18 @@
     if (S.phase === 'day') { set('l-clock', 'At work'); set('v-clock', `Day ${S.night - 1}`); }
     else { set('l-clock', 'Alarm in'); set('v-clock', clock(S.shiftLen - S.sleepLost - S.time)); $('p-clock').classList.toggle('cut', S.shiftLen - S.sleepLost - S.time < 20); }
     show('p-refined', hasRef); if (hasRef) { const w = Math.round((rawNow / Math.max(1, d.cap)) * 100); if (G.shown.rw !== w) { G.shown.rw = w; $('b-refined').style.width = w + '%'; $('p-refined').title = `Tanks ${Math.floor(rawNow)}/${d.cap} mL raw · ${Math.floor(S.refined)} mL refined`; } }
-    show('p-staff', S.hires > 0 || S.workers.length > 0); set('v-staff', String(S.workers.length)); set('v-housing', `/${Math.min(d.housing, d.crewCap)}`);
+    show('p-staff', S.hires > 0 || S.workers.length > 0);
+    if (multi(S)) {
+      const mine = S.workers.filter((w) => (w.lent || w.div) === S.focus).length, other = sim.divs(S).find((D) => D.id !== S.focus);
+      if (G.shown['l-staff'] !== S.focus) { G.shown['l-staff'] = S.focus; $('l-staff').innerHTML = `${C.DIVISIONS[S.focus].short}<i class="wide"> staff</i>`; } set('v-staff', String(mine)); set('v-housing', `/${d.divs[S.focus].crewCap}`);
+      const ps = $('p-staff'); if (!ps.classList.contains('switch')) { ps.classList.add('switch'); ps.setAttribute('role', 'button'); ps.tabIndex = 0; }
+      if (other && ps.dataset.to !== other.id) { ps.dataset.to = other.id; ps.setAttribute('aria-label', `On the ${C.DIVISIONS[S.focus].short.toLowerCase()} floor. Switch to the ${C.DIVISIONS[other.id].short.toLowerCase()}`); }
+      ps.classList.toggle('alert', !!(other && hazardAt(S, other)));
+    } else { if (G.shown['l-staff'] !== 'Staff') { G.shown['l-staff'] = 'Staff'; $('l-staff').textContent = 'Staff'; } set('v-staff', String(S.workers.length)); set('v-housing', `/${Math.min(d.housing, d.crewCap)}`); const ps = $('p-staff'); if (ps.classList.contains('switch')) { ps.classList.remove('switch', 'alert'); ps.removeAttribute('role'); ps.removeAttribute('tabindex'); ps.removeAttribute('aria-label'); delete ps.dataset.to; } }
     // one plate, two jobs: his sleep and itch at night; his suspicion (and when he next buys something) in the day
     const day = S.phase === 'day', sus = save.campaign.suspicion, nxt = K.nextCounter(save.campaign);
     show('p-irr', day ? S.night > 2 || sus > 0 : S.unlocked.includes('scatter'));
-    const lab = day ? 'Suspicion' : S.rhythm ? (S.depth < 0.35 ? 'Light' : S.depth > 0.6 ? 'Deep' : 'Sleep') : 'Itch'; set('l-irr', lab);
+    const bk = save.campaign.booking, lab = day ? (bk !== null ? `Exterminator ${Math.max(0, bk - S.night + 1)}n` : 'Suspicion') : S.rhythm ? (S.depth < 0.35 ? 'Light' : S.depth > 0.6 ? 'Deep' : 'Sleep') : 'Itch'; set('l-irr', lab);
     $('p-irr').classList.toggle('light', !day && S.rhythm && S.depth < 0.35); $('p-irr').classList.toggle('deep', !day && S.rhythm && S.depth > 0.6);
     const ip = Math.round(day ? sus : S.irritation); if (G.shown.ip !== ip + (day ? 'd' : 'n')) { G.shown.ip = ip + (day ? 'd' : 'n'); $('b-irr').style.width = ip + '%'; $('p-irr').querySelector('u').style.left = `${day ? (nxt ? nxt.at : 100) : C.ECON.eventThreshold}%`; }
     show('pace', !day && S.unlocked.includes('push')); const pv = String(S.pace === 2); if (G.shown.pv !== pv) { G.shown.pv = pv; $('push').setAttribute('aria-pressed', pv); $('ease').setAttribute('aria-pressed', String(S.pace !== 2)); }
@@ -308,7 +356,7 @@
     const lw = S.workers.find((w) => w.job === 'lookout'), ls = $('lookout-state'), lt = lw ? (S.lookoutCd > 0 ? `Form 7-B · ${Math.ceil(S.lookoutCd)}s` : 'Lookout ready') : '';
     if (G.shown.lt !== lt) { G.shown.lt = lt; ls.hidden = !lt; ls.textContent = lt; ls.classList.toggle('busy', S.lookoutCd > 0); }
     const rc = $('recall'), cd = S.recallCd > 0; rc.classList.toggle('cooling', cd); rc.style.setProperty('--cd', cd ? `${(S.recallCd / (C.FEEL.recall_cooldown_s * S.mods.recallCd)) * 100}%` : '0%');
-    if (!(S.hev && !S.hev.hit && (S.hev.kind === 'swat' || S.hev.kind === 'scratch'))) rc.classList.remove('alarm');
+    if (!sim.divs(S).some((D) => hazardAt(S, D))) rc.classList.remove('alarm');
     const ct = coachText(S, now), coach = $('coach'), txt = ct ? ct[0] : '';
     if (G.shown.coach !== txt) { G.shown.coach = txt; coach.hidden = !ct; if (ct) { coach.textContent = txt; coach.className = `coach ${ct[1] || ''}`; flash('coach', 'arrive'); } }
     const key = visibleCards(S).join(',') + '|' + (G.placing || '') + '|' + (G.selected || '');
@@ -327,6 +375,8 @@
     // a phone needs the close-up to read one mosquito; a wide screen already shows her at a readable size
     const narrow = Math.max(0, Math.min(1, (760 - stageRect().width) / 340));
     const z = 1 + ((n < 0.5 ? 1.7 : n < 1.5 ? 1.42 : n < 3 ? 1.2 : 1) - 1) * narrow;
+    // two divisions on a phone: frame the whole bed, arm to foot, leaning a little toward the floor you are on
+    if (multi(S) && narrow > 0.3) { const lean = sim.div(S).site === 'foot' ? 0.45 : -0.45; return { f: [7.3 + lean, 4.9 - lean * 0.6, 1.9], z: 1 - 0.06 * narrow, k: 0.6 }; }
     return { f: [6.4, 5.3, 1.6], z, k: z > 1.01 ? 0.85 : 0 };
   }
   function stageRect() {
@@ -375,7 +425,7 @@
   const fxName = (S) => (S && S.hev && S.hev.kind === 'swat' ? (S.hev.hit ? 'swat-impact' : 'swat-warning') : S && S.hev ? S.hev.kind : null);
   window.__game = {
     get state() { return G.mode === 'title' ? 'title' : G.mode === 'opening' ? 'opening' : G.S.state; }, get phase() { return G.S ? G.S.phase : save.campaign.phase; }, get refined() { return G.S ? Math.floor(G.S.refined) : 0; }, get depth() { return G.S ? G.S.depth : 1; }, get lookout() { const w = G.S && G.S.workers.find((x) => x.job === 'lookout'); return w ? (G.S.lookoutCd > 0 ? 'paperwork' : 'ready') : null; }, get pushing() { return !!(G.S && G.S.pace === 2); }, get suspicion() { return save.campaign.suspicion; }, get counters() { return Object.keys(save.campaign.counters); }, get zones() { return G.S ? G.S.zones : save.campaign.zones; }, get paused() { return G.paused; }, get score() { return G.S ? Math.round(G.S.extracted) : 0; }, get time() { return G.S ? G.S.time : 0; },
-    get bank() { return G.S ? Math.floor(G.S.bank) : 0; }, get workers() { return G.S ? G.S.workers.length : 0; }, get buildings() { return G.S ? G.S.buildings.length - 1 : 0; }, get casualties() { return G.S ? G.S.lost.length : 0; },
+    get bank() { return G.S ? Math.floor(G.S.bank) : 0; }, get workers() { return G.S ? G.S.workers.length : 0; }, get buildings() { return G.S ? G.S.buildings.length - 1 : 0; }, get casualties() { return G.S ? G.S.lost.length : 0; }, get focus() { return G.S ? G.S.focus : null; }, get divisions() { return G.S ? G.S.divOrder.slice() : save.campaign.divisions.slice(); },
     get irritation() { return G.S ? G.S.irritation : 0; }, get night() { return G.S ? G.S.night : save.campaign.night; }, get founder() { return G.S ? G.S.founder.st : null; }, get belly() { return G.S ? G.S.founder.belly : 0; },
     get step() { return G.S && G.S.tut ? G.S.tut.step : null; }, get placing() { return G.placing; }, get unlocked() { return G.S ? G.S.unlocked.slice() : []; }, get sleepLeft() { return G.S ? G.S.shiftLen - G.S.sleepLost - G.S.time : 0; }, get fx() { return fxName(G.S); }, get cine() { return G.mode === 'opening' ? G.cineT : null; },
     debug: {
@@ -388,7 +438,7 @@
         while (S.workers.length < 6) sim.hire(S, true); S.hires = Math.max(S.hires, 6); if (!S.unlocked.includes('scatter')) S.unlocked.push('scatter'); if (S.tut) { S.tut.step = 'free'; S.tut.scratched = true; }
         S.buildings.forEach((b) => (b.born = -9)); S.bank = 184; S.events.length = 0; S.stats.idleNoteAt = 1e9; G.memoQ = [{ text: C.NOTES.idle[0], tone: 'idle' }]; G.memoUntil = 0; G.cardsKey = '';
       },
-      trigger(what) { const S = G.S; if (!S || S.state !== 'playing') return; if (what === 'swat') { S.hev = null; S.eventCd = 1e9; for (let i = 0; i < 300 && !(i > 30 && S.biting >= 3); i++) { S.siteBlocked = 0; S.covered = 0; S.recallT = 0; S.irritation = Math.min(S.irritation, 20); sim.step(S, STEP); drainEvents(); } S.eventCd = 6; sim.startEvent(S, 'swat'); } else if (what === 'wake') sim.wake(S); else if (['scratch', 'roll', 'blanket', 'stir'].includes(what)) { S.hev = null; sim.startEvent(S, what); } drainEvents(); },
+      trigger(what, dv) { const S = G.S; if (!S || S.state !== 'playing') return; if (what === 'swat') { S.hev = null; S.eventCd = 1e9; for (let i = 0; i < 300 && !(i > 30 && S.biting >= 3); i++) { S.siteBlocked = 0; S.covered = 0; S.recallT = 0; S.irritation = Math.min(S.irritation, 20); sim.step(S, STEP); drainEvents(); } S.eventCd = 6; sim.startEvent(S, 'swat'); } else if (what === 'wake') sim.wake(S); else if (['scratch', 'roll', 'blanket', 'stir', 'rub', 'kick'].includes(what)) { const D = sim.div(S, dv); D.hev = null; sim.startEvent(S, what, null, D.id); } drainEvents(); },
     },
   };
 

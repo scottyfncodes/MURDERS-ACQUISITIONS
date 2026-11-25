@@ -181,11 +181,12 @@ const runNight = (S, secs, each) => { while (S.state === 'playing' && S.time < s
 }
 // suspicion: bites and disturbances add up across nights; he buys a fan, then a repellent, one per morning
 {
-  const S = sim.newNight(colony(), { seed: 2 }); S.stats.loads = 100; S.suspicion = 9; const r = sim.report(S);
-  assert.strictEqual(r.suspicion, Math.round(C.ECON.suspicionPerSqrtLoad * 10 + 9), 'suspicion = bites (diminishing) + disturbances');
+  const S = sim.newNight(colony(), { seed: 2 }); sim.home(S).stats.loads = 100; sim.home(S).stats.noticed = 100; S.sus.events = { scratch: 2, swat: 1 }; S.sus.lost = 1; const r = sim.report(S);
+  assert.strictEqual(r.suspicion, Math.round(C.ECON.suspicionPerSqrtLoad * 10 + 2 * 2 + 4 + C.ECON.suspicionPerLoss), 'suspicion = bites (diminishing) + disturbances + bodies');
+  assert.deepStrictEqual(r.susParts.map((p) => p.key), ['bites', 'scratch', 'swat', 'lost'], 'and the report itemises it');
   let camp = colony({ suspicion: 32 }); camp = K.fold(camp, S, Object.assign(r, { suspicion: 10 }));
   assert.ok(camp.counters.fan && camp.newCounter === 'fan' && camp.unlocks.includes('windbreak'), 'crossing 40% buys the fan and offers the windbreak');
-  assert.strictEqual(camp.suspicion, 42 - C.ECON.suspicionDailyForget, 'he forgets some of it during the day');
+  assert.strictEqual(camp.suspicion, 42 - (C.ECON.suspicionForgetBase + C.ECON.suspicionForgetShare * 42), 'he forgets some of it during the day: a fixed amount plus a share');
   const big = K.fold(colony({ suspicion: 90 }), S, Object.assign(sim.report(S), { suspicion: 10 }));
   assert.ok(big.counters.fan && !big.counters.repellent, 'never more than one new countermeasure a morning');
   const day = sim.newNight(camp, { day: true, seed: 2 }); assert.ok(day.events.some((e) => e.type === 'memo' && e.text === C.NOTES.counter.fan), 'the day opens on what he bought');
@@ -276,10 +277,23 @@ const runNight = (S, secs, each) => { while (S.state === 'playing' && S.time < s
 
 // ---------- divisions: the foundation for acquisitions ----------
 // the PR #6 behaviour is reproduced exactly (tests/golden/baseline.json, recorded from the PR #6 code)
-{ const diffs = require('./regression.js').check(true); assert.strictEqual(diffs, 0, 'identical to the PR #6 golden baseline, including saves written by PR #6'); console.log('regression identical to PR #6'); }
+{ const diffs = require('./regression.js').check(true); assert.strictEqual(diffs, 0, 'identical to the golden baseline (tests/golden/baseline.json)'); console.log('regression identical to the baseline'); }
+// saves written by the PR #6 code (before divisions existed) load into the Acquisitions design and play on
+{
+  const old = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, 'golden', 'pr6-saves.json'), 'utf8'));
+  for (const [k, c] of Object.entries(old)) {
+    const loaded = K.fromSave(JSON.parse(JSON.stringify({ v: 2, settings: { muted: false, seenOpening: true }, campaign: c }))).campaign;
+    assert.deepStrictEqual(loaded.divisions, ['arm'], `${k}: one division`); assert.strictEqual(loaded.workers.length, c.workers.length, `${k}: every employee`);
+    assert.deepStrictEqual(loaded.workers.map((w) => w.name), c.workers.map((w) => w.name)); assert.strictEqual(loaded.bank, c.bank); assert.strictEqual(loaded.buildings.length, c.buildings.length, `${k}: every building`);
+    assert.ok(loaded.buildings.filter((b) => ['rig', 'drip', 'lookout'].includes(b.type)).every((b) => b.div === 'arm'), `${k}: rig, drip line and lookout belong to the arm`);
+    assert.strictEqual(K.leaseNight(loaded), 1, `${k}: a save from before leases starts a fresh 14-night lease`);
+    const x = play(loaded, { seed: 5, careful: true, handsOff: true }); assert.strictEqual(x.S.state, 'over', `${k}: plays a full night`); K.dawn(loaded, x.S, x.r);
+  }
+  console.log('PR #6 saves', Object.keys(old).length, 'load and play');
+}
 // two divisions run independently: a test-only division at the foot, registered just for this block
 {
-  C.DIVISIONS.test = { name: 'Test Division', short: 'Test', site: 'foot' };
+  C.DIVISIONS.test = Object.assign({}, C.DIVISIONS.arm, { name: 'Test Division', short: 'Test', site: 'foot' });
   const crew = (n, dv, from) => Array.from({ length: n }, (_, i) => ({ id: from + i, name: `${dv} ${i}`, trait: 'Quiet', larvae: 50, div: dv }));
   const camp = K.cleanCampaign({ night: 3, divisions: ['arm', 'test', 'nowhere'], bank: 0, buildings: [{ type: 'tank', level: 3, pad: 1 }, { type: 'tank', level: 3, pad: 2 }, { type: 'pool', level: 3, pad: 9 }, { type: 'pool', level: 3, pad: 3 }, { type: 'rig', level: 1, div: 'arm' }, { type: 'rig', level: 2, div: 'test' }, { type: 'lookout', level: 1, div: 'test' }, { type: 'rig', level: 3, div: 'nowhere' }], workers: crew(4, 'arm', 1).concat(crew(7, 'test', 10)), nextId: 30, hires: 11, unlocks: ['tank', 'pool', 'scatter', 'rig', 'lookout', 'push'] });
   assert.deepStrictEqual(camp.divisions, ['arm', 'test'], 'unknown divisions are dropped; the arm is always first');
@@ -291,7 +305,7 @@ const runNight = (S, secs, each) => { while (S.state === 'playing' && S.time < s
   const lw = S.workers.find((w) => w.job === 'lookout'); assert.ok(lw && lw.div === 'test' && lw.id === 10, 'each division\'s lookout comes from its own staff');
   const foot = C.SITES.foot.skin, arm = C.SITES.arm.skin, near = (w, k) => Math.hypot(w.pos[0] - k[0], w.pos[1] - k[1]) < 2.5;
   let seenFoot = 0, wrong = 0; const watch = (dv, k) => { for (const w of S.workers) if (w.div === dv && w.st === 'bite') { if (near(w, k)) seenFoot++; else wrong++; } };
-  T.pace = 2; runNight(S, 20, (x) => { x.bank = 0; x.refined = 0; A.recallT = 5; watch('test', foot); }); A.recallT = 0; // the arm is held off the skin; the test division pushes
+  S.gmPolicy.test = 'aggressive'; runNight(S, 20, (x) => { x.bank = 0; x.refined = 0; A.recallT = 5; watch('test', foot); }); A.recallT = 0; // the arm is held off the skin; the test division's GM pushes
   assert.ok(seenFoot > 0 && wrong === 0, 'each crew bites at its own site');
   assert.strictEqual(A.irritation, 0); assert.ok(T.irritation > 0, 'each division has its own itch');
   seenFoot = 0; runNight(S, 30, (x) => { x.bank = 0; x.refined = 0; watch('arm', arm); }); assert.ok(seenFoot > 0 && wrong === 0, 'and the arm crew at the arm');
