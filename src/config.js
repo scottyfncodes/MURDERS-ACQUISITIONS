@@ -40,6 +40,15 @@
     sleepCycleSeconds: 40, deepIrritation: 0.45, lightIrritation: 1.6,
     // suspicion: what he notices. Bites add a little (with diminishing returns), disturbances more, and a squashed employee most; he forgets some each day
     suspicionPerSqrtLoad: 0.6, suspicionScratch: 2, suspicionSwat: 4, suspicionStir: 10, suspicionPerLoss: 3, suspicionDailyForget: 20,
+    // he forgets some of it each day: a fixed amount plus a share of what there is (so suspicion settles instead of only climbing)
+    suspicionForgetBase: 10, suspicionForgetShare: 0.28,
+    // the exterminator: booked when he reaches 100%, comes after this many nights unless that morning's suspicion is below cancelBelow
+    bookAt: 100, warningNights: 3, cancelBelow: 70,
+    // fumigation ("restructuring"): share of non-executive staff lost, suspicion afterwards, nights before he can book again,
+    // nights of discounted rehiring and the discount
+    fumigationStaffShare: 0.4, fumigatedSuspicion: 40, fumigationGrace: 3, rehireNights: 2, rehireDiscount: 0.5,
+    // the host lifecycle: nights per lease
+    leaseNights: 14,
     // countermeasures, in the order he buys them, and the suspicion that sets each one off
     counters: [{ id: 'fan', at: 40, answer: 'windbreak' }, { id: 'repellent', at: 75, answer: 'masks' }],
     fanFlightFactor: 1.5, repellentBiteFactor: 1.6,
@@ -47,11 +56,17 @@
     reserveStaff: 2,
     // the lookout: how fast they call a swat, and the paperwork after every call (Form 7-B), by level. Swats only: scratches stay the player's
     lookoutReaction: 0.45, lookoutReport: [24, 15],
+    // acquisitions: the foot is offered once the arm's rig reaches this level
+    acquireAtRig: 4,
+    // the acquired site's processing plant, per level
+    plantCap: 200, plantRefine: 2,
+    // General Managers read his sleep this many seconds late (untrained, after one seminar, after two), and push above this depth
+    gmLag: [9, 4, 1.5], gmPushAbove: 0.55,
   };
   const PACE = [
-    { id: 'cautious', label: 'Ease off', bite: 1.25, fly: 1.1, irritation: 0.4, morale: 0.10 },
-    { id: 'standard', label: 'Standard', bite: 1.0, irritation: 1.0, morale: 0.02 },
-    { id: 'aggressive', label: 'Aggressive', bite: 0.5, fly: 0.8, irritation: 2.0, morale: -0.05 },
+    { id: 'cautious', label: 'Ease off', bite: 1.25, fly: 1.1, irritation: 0.4, notice: 0.5, morale: 0.10 },
+    { id: 'standard', label: 'Standard', bite: 1.0, irritation: 1.0, notice: 1, morale: 0.02 },
+    { id: 'aggressive', label: 'Aggressive', bite: 0.5, fly: 0.8, irritation: 2.0, notice: 1.6, morale: -0.05 },
   ];
 
   // `unlock` is when a card first appears: never on a timer, always because the operation hit a wall
@@ -64,12 +79,15 @@
     drip: { name: 'Drip line', short: 'Drip', cost: 110, growth: 1, blurb: 'A funnel at the bite, piped straight to storage. Staff unload right where they drink.', effect: () => 'Unloads at the bite', gain: 'Shortest trips', single: true, maxLevel: 1 },
     windbreak: { name: 'Windbreak', short: 'Windbreak', cost: 90, growth: 1, blurb: 'A cereal box, flattened, between the fan and the bite. Flights are back to normal.', effect: () => 'Cancels the fan', gain: 'Cancels the fan', single: true, maxLevel: 1 },
     masks: { name: 'Gas masks', short: 'Masks', cost: 140, growth: 1, blurb: 'Tiny masks for every employee. Bites are back to normal speed. Morale is complicated.', effect: () => 'Cancels the repellent', gain: 'Cancels the repellent', single: true, maxLevel: 1 },
-    lookout: { name: 'Lookout', short: 'Lookout', cost: 60, growth: 2.5, blurb: 'Occupational Health & Safety. One employee in hi-vis on a perch above the bite, with a whistle. Calls swats, then files Form 7-B.', effect: (l) => l >= 2 ? 'Safety Officer · calls swats · 15 s of paperwork' : 'Calls swats · 24 s of paperwork', gain: 'Calls swats for you', upgradeGain: 'Promote: faster paperwork', single: true, maxLevel: 2 },
+    lookout: { name: 'Lookout', short: 'Lookout', cost: 60, growth: 2.5, blurb: 'Occupational Health & Safety. One employee in hi-vis on a perch above the bite, with a whistle. Calls swats, then files Form 7-B.', effect: (l) => l >= 2 ? 'Safety Officer · calls swats · 15 s of paperwork' : 'Calls swats · 24 s of paperwork', gain: 'Calls swats for you', upgradeGain: 'Faster paperwork', single: true, maxLevel: 2 },
+    acquire: { name: 'Acquire the foot', short: 'Acquisition', cost: 5000, growth: 1, blurb: 'Lower Extremities: one ankle, sticking out from under the blanket. Slower bites, bigger loads, kicks instead of swats. Arrives with no staff and no infrastructure.', effect: () => 'A second division', gain: 'A second division', single: true, maxLevel: 1, acquire: 'foot' },
+    plant: { name: 'Processing plant', short: 'Plant', cost: 200, growth: 2, blurb: 'A vertically integrated subsidiary at the acquired site: its own storage and its own refining. Staff there unload into it.', effect: (l) => `Holds ${200 * l} mL · refines ${(2 * l).toFixed(0)} mL/s`, gain: '+200 mL storage, +2 mL/s refining', upgradeGain: 'Expand the plant', single: true, maxLevel: 3, acquiredOnly: true },
+    seminar: { name: 'Leadership Seminar', short: 'Seminar', cost: 120, growth: 2.2, blurb: 'A weekend retreat for this division\'s General Manager. Trust falls. Reading the room. Reading his sleep, mostly.', effect: (l) => l >= 2 ? 'GM reads his sleep 1.5 s late' : 'GM reads his sleep 4 s late', gain: 'Your GM reads his sleep faster', upgradeGain: 'Advanced course', single: true, maxLevel: 2 },
     floor: { name: 'Floor space', short: 'Floor', cost: 60, growth: 1, blurb: 'The window side of the room, unclaimed. Four more places to build.', effect: () => '+4 build spots', gain: '+4 build spots', single: true, maxLevel: 1, expand: true },
     hatchery: { name: 'Hatchery', short: 'Hatchery', cost: 70, growth: 1.7, blurb: 'Nurses raise new hires here. Each hire costs banked blood.', effect: (l) => `${2 * l} nurse stations`, gain: '+2 nurses' },
   };
   // the cards a player can see, in order; refinery and hatchery return with the day phase
-  const BUILD_ORDER = ['windbreak', 'masks', 'lookout', 'tank', 'pool', 'refinery', 'rig', 'drip', 'floor'];
+  const BUILD_ORDER = ['windbreak', 'masks', 'acquire', 'lookout', 'plant', 'seminar', 'tank', 'pool', 'refinery', 'rig', 'drip', 'floor'];
   // where Rhonda founded the company: a bottle cap under the bed, a short hop from the arm
   const NEST = [8.1, 3.3];
   // the floor opens in zones: the near floor first, the window side when it runs out (indices into PADS)
@@ -77,12 +95,27 @@
 
   // pads on the bedroom floor, in the order they fill; [x, y] in diorama tiles
   const PADS = [[0.9, 8.6], [6.2, 7.6], [8.9, 7.4], [3.6, 8.9], [11.5, 7.8], [11.9, 0.5], [8.8, 9.7], [0.7, 6.4], [11.9, 5.3], [6.1, 9.9], [11.3, 9.8]];
-  const SITES = { arm: { skin: [4.95, 6.55, 2.6], rig: [3.4, 6.8] }, foot: { skin: [10.55, 3.35, 2.6], rig: [10.7, 3.9] } };
+  const SITES = { arm: { skin: [4.95, 6.55, 2.6], rig: [3.4, 6.8] }, foot: { skin: [10.55, 3.4, 5.0], rig: [10.7, 3.9] } };
   // operating divisions: each runs its own crew, irritation, hand and infrastructure at a bite site.
   // The arm is the original division; acquisitions add more. `site` is where the division starts the night
-  const DIVISIONS = { arm: { name: 'Upper Extremities', short: 'Arm', site: 'arm' } };
-  const DIVISION_ORDER = ['arm'];
-  const DIVISION_BUILDINGS = ['rig', 'drip', 'lookout'];
+  // bite: bite time; load: mL per bite; itch: irritation per biter; minor/major: its hazards (the lookout calls the major one);
+  // socks: times a night the site goes under the covers
+  const DIVISIONS = {
+    arm: { name: 'Upper Extremities', short: 'Arm', site: 'arm', bite: 1, load: 1, itch: 1, minor: 'scratch', major: 'swat', socks: 0 },
+    foot: { name: 'Lower Extremities', short: 'Foot', site: 'foot', bite: 1.35, load: 1.4, itch: 0.7, minor: 'rub', major: 'kick', socks: 3 },
+  };
+  // a division defined with only a name and a site (a future host archetype) behaves like the arm
+  const DIVISION_DEFAULTS = { bite: 1, load: 1, itch: 1, minor: 'scratch', major: 'swat', socks: 0 };
+  for (const k of Object.keys(DIVISIONS)) DIVISIONS[k] = Object.assign({}, DIVISION_DEFAULTS, DIVISIONS[k]);
+  const DIVISION_ORDER = ['arm', 'foot'];
+  const DIVISION_BUILDINGS = ['rig', 'drip', 'lookout', 'seminar', 'plant'];
+  // every hazard: warning (s), how long it lasts, share of the crew on the skin it kills, how long the site is shut, sleep it costs, suspicion it adds
+  const HAZARDS = {
+    scratch: { telegraph: 1.0, hold: 0.9, kill: 0.25, block: 2.5, sleep: 3, suspicion: 2 },
+    swat: { telegraph: 1.4, hold: 1.2, kill: 0.6, block: 3.5, sleep: 6, suspicion: 4, minOne: true },
+    rub: { telegraph: 1.0, hold: 1.0, kill: 0.3, block: 2.5, sleep: 2, suspicion: 2 },
+    kick: { telegraph: 0.9, hold: 0.8, kill: 0.15, block: 5, sleep: 3, suspicion: 3 },
+  };
 
   const POLICIES = [
     { id: 'overtime', name: 'Mandatory Overtime', text: 'Loads are 30% bigger. Morale drifts down. Pizza is implied.', apply: (S) => { S.mods.extract *= 1.3; S.mods.moraleDrift -= 0.08; } },
@@ -154,9 +187,25 @@
     lookoutHired: (name) => `${name} is our Lookout. Title: Head of Occupational Health & Safety. Headcount: one. Budget: a whistle. — R.`,
     lookoutCalled: (name) => `${name} called it. Nobody hurt. ${name.split(' ')[0]} is now filling in Form 7-B, which takes twenty-four seconds. — R.`,
     lookoutBusy: 'The hand came back while the lookout was filing paperwork. Scatter is still your job. — R.',
-    lookoutScratch: 'The lookout does not do scratches. It is not in the job description. — R.',
+    lookoutScratch: 'The lookout does not do scratches, or rubs. It is not in the job description. — R.',
     lookoutPromoted: (name) => `${name} is now our Safety Officer. Paperwork is faster. Scratches are still not in the job description. Morale in the department: one. — R.`,
     hrPause: (slots) => `HR has paused hiring. The arm has ${slots} spots and we have people waiting for them. A rig, not a pool. — R.`,
+    acquirePitch: 'The arm is running at capacity. The board (me) has identified an acquisition target: the left foot. He sleeps with it out of the blanket. So do 61% of men. We checked. — R.',
+    acquired: (name) => `We have acquired ${name}. It comes with no staff, no infrastructure and one ankle. Synergies are expected. — R.`,
+    gmAppointed: (name, div) => `${name} is now General Manager, ${div}. ${name.split(' ')[0]} no longer bites. ${name.split(' ')[0]} has meetings. — R.`,
+    seminar: (div) => `The ${div} GM is back from the Leadership Seminar. Reads his sleep faster. Uses the word "bandwidth" now. — R.`,
+    rollAcquired: 'He rolled onto the arm. Upper Extremities is dark for the night. Their staff are on loan to the foot. — R.',
+    sock: 'The foot went under the covers. Lower Extremities is on an unscheduled break. — R.',
+    policyName: { lie: 'Lie low', standard: 'Standard', aggressive: 'Aggressive' },
+    policyHint: { lie: 'GM eases off all night. Quiet, slower.', standard: 'GM pushes when he seems deep asleep.', aggressive: 'GM pushes all night. Fast. Itchy.' },
+    focusCoach: 'Two divisions. Tap the staff plate to change floors; the GM runs the other one.',
+    relocated: (n) => `We have relocated. Host #${n}: male, 34, middle manager. Again. The mattress is firmer. He has never seen a mosquito in his life. — R.`,
+    leaseOver: 'His lease is up. He is moving. So are we. The annual report is on your desk. — R.',
+    annual: (t, leaseN) => ({
+      title: t.lost > 40 ? 'A record year' : 'A disciplined year',
+      note: `Host #${leaseN}: ${t.extracted.toLocaleString('en-US')} mL over the lease. ${t.lost} colleagues lost${t.fumigations ? `, ${t.fumigations} restructuring${t.fumigations === 1 ? '' : 's'}` : ''}. Executive compensation has been adjusted accordingly (upward). His lease is up, and so is ours: corporate has found a new address. — R.`,
+      grid: [['Collected', `${t.extracted.toLocaleString('en-US')} mL`], ['Best night', `${t.best.toLocaleString('en-US')} mL`], ['Hired', String(t.hired)], ['Lost', String(t.lost)], ['Restructurings', String(t.fumigations)], ['Cancelled', String(t.cancelled)]],
+    }),
     nightStart: (n, staff) => n === 2 ? `Night 2. ${staff ? `${staff} on payroll. ` : ''}Same arm, bigger plans. — R.` : `Night ${n}. ${staff} on payroll. Let's circle back to the arm. — R.`,
     idle: [
       'I have started calling the arm "the pipeline". — R.',
@@ -179,11 +228,11 @@
       const t = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`, out = [];
       if (r.storageFullSec > 4) out.push({ ml: r.lostToStorage, text: `Storage was full for ${t(r.storageFullSec)}. About ${r.lostToStorage} mL had nowhere to go.`, fix: 'Build or upgrade a tank.' });
       if (r.lost.length) {
-        const parts = [r.deadBy.swat ? `${r.deadBy.swat} to swats` : '', r.deadBy.scratch ? `${r.deadBy.scratch} to scratches` : ''].filter(Boolean).join(', ');
+        const by = r.deadBy, parts = [['swat', 'swats'], ['scratch', 'scratches'], ['kick', 'kicks'], ['rub', 'rubs']].filter(([k]) => by[k]).map(([k, w]) => `${by[k]} to ${w}`).join(', '), minor = (by.scratch || 0) + (by.rub || 0), major = (by.swat || 0) + (by.kick || 0);
         const late = r.deadWhileCooling ? ` ${r.deadWhileCooling} died with Scatter still recharging.` : r.deadOnReport ? ` ${r.deadOnReport} died while the lookout filed paperwork.` : '';
-        out.push({ ml: r.replaceCost, text: `We lost ${r.lost.length} (${parts}).${late} Replacing them costs about ${r.replaceCost} mL.`, fix: !r.lookout ? 'A lookout calls swats for you. Ease off in light sleep.' : r.deadBy.scratch >= r.deadBy.swat ? 'Scratches are yours: the lookout only does swats. Scatter early.' : r.lookout < 2 && r.deadOnReport ? 'Promote the lookout: Safety Officers file faster.' : 'Ease off in light sleep. Scatter early.' });
+        out.push({ ml: r.replaceCost, text: `We lost ${r.lost.length}${parts ? ` (${parts})` : ''}.${late} Replacing them costs about ${r.replaceCost} mL.`, fix: !r.lookout ? 'A lookout calls swats for you. Ease off in light sleep.' : minor >= major ? (by.rub ? 'Scratches and rubs are yours: lookouts only call swats and kicks. Scatter early.' : 'Scratches are yours: the lookout only does swats. Scatter early.') : r.lookout < 2 && r.deadOnReport ? 'Promote the lookout: Safety Officers file faster.' : 'Ease off in light sleep. Scatter early.' });
       }
-      if (r.offArmSec > 10) out.push({ ml: r.lostToInterruptions, text: `The line stopped ${r.hits + r.calls} times (${r.hits} hands, ${r.calls} Scatters). ${t(r.offArmSec)} off the arm, about ${r.lostToInterruptions} mL.`, fix: r.lookout ? 'Ease off when he goes light.' : 'Ease off when he goes light, and push when he is deep.' });
+      if (r.offArmSec > 10) out.push({ ml: r.lostToInterruptions, text: `The line stopped ${r.hits + r.calls} times (${r.hits} ${r.deadBy && (r.deadBy.rub !== undefined) && r.divisions && r.divisions.length > 1 ? 'hands and feet' : 'hands'}, ${r.calls} Scatters). ${t(r.offArmSec)} off the arm, about ${r.lostToInterruptions} mL.`, fix: r.lookout ? 'Ease off when he goes light.' : 'Ease off when he goes light, and push when he is deep.' });
       if (r.lostToCrowd > 20) out.push({ ml: r.lostToCrowd, text: `Staff queued for a spot on the arm. About ${r.lostToCrowd} mL of standing around.`, fix: r.rigMaxed ? 'The rig is as big as it gets.' : 'An extraction rig fits more on.' });
       if (r.clotted > 0) out.push({ ml: r.clotted, text: `${r.clotted} mL clotted by morning.`, fix: r.refineries ? 'More refining, or spend it before dawn.' : 'A refinery keeps it.' });
       if (r.fanLoss) out.push({ ml: r.fanLoss, text: 'The fan slowed every flight.', fix: 'A windbreak cancels it.' });
@@ -193,6 +242,18 @@
       return out.slice(0, 3);
     },
     heldNone: 'Nothing held us back. Corporate will find something. — R.',
+    // the suspicion breakdown: one line per source, then what he forgets, then where it stands
+    susLabel: (p) => ({ bites: `Bites at the ${p.div === 'foot' ? 'foot' : 'arm'} (${p.count})`, scratch: `Scratches (${p.count})`, swat: `Swats (${p.count})`, rub: `Rubs (${p.count})`, kick: `Kicks (${p.count})`, stir: `He woke up (${p.count})`, lost: `Bodies found (${p.count})` }[p.key] || p.key),
+    susForget: 'He forgets some of it today',
+    susStatus: (n) => n.booking ? `He has booked an exterminator. It comes in ${n.nightsLeft} night${n.nightsLeft === 1 ? '' : 's'} unless his suspicion is under ${n.cancelBelow}% that morning. Ease off; lie low.` : n.next ? `At ${n.next.at}% he buys something. At 100% he calls an exterminator.` : 'At 100% he calls an exterminator.',
+    booked: 'He googled "mosquitoes bedroom". Then "how many mosquitoes is too many". Then "exterminator near me". — R.',
+    cancelled: 'He cancelled the exterminator. Something came up. We will not be finding out what. — R.',
+    restructure: (f) => `${f.lost.length} colleague${f.lost.length === 1 ? ' was' : 's were'} let go, most recent hires first${f.byDiv.length > 1 ? ` (${f.byDiv.map((d) => `${d.lost} from ${d.id === 'foot' ? 'Lower' : 'Upper'} Extremities`).join(', ')})` : ''}. Raw inventory written off: ${f.raw} mL. ${f.pools ? `${f.pools} pool${f.pools === 1 ? '' : 's'} downsized. ` : ''}Executive leadership (${f.executives + 1}) was in a meeting and is unharmed.`,
+    fumigatedNote: 'He had someone in at nine. Leadership was offsite. — R.',
+    restructureHead: 'A leaner, more agile organisation.',
+    restructureNote: 'This was a difficult decision for leadership. Rehiring is half price for two nights. Thoughts and prayers have been issued. Targets are unchanged. — R.',
+    divisionLine: (d) => `${d.extracted} mL · ${d.staff} staff${d.lost ? ` · ${d.lost} lost` : ''}${d.offline ? ` · dark ${Math.round(d.offline)}s` : ''}`,
+    lease: (k, n) => `Night ${k} of ${n}`,
     clot: (r) => r.clotted > 0 ? `${r.clotted} mL clotted overnight${r.refined ? `; ${r.refined} mL was refined and kept` : ''}.` : r.refined ? `${r.refined} mL refined. Nothing clotted.` : '',
     note: (r) => r.night === 1 ? (r.staff ? 'Last night it was just me. This morning we are a company. — R.' : 'Tonight we hire. Nobody builds an empire alone. — R.') : r.lost.length ? 'We keep going. It is what they would have wanted. Probably. — R.' : 'He has no idea. Let\'s keep it that way. — R.',
   };
@@ -280,9 +341,13 @@
     ['Days', 'While he is at work there is no clock and no hand. Build, then call nightfall.'],
     ['His sleep', 'From the second night he sleeps in waves. Bites itch far less in deep sleep. Push while he is deep under and ease off when he goes light.'],
     ['Suspicion', 'Every bite and every scratch makes him a little more suspicious. Past a point he buys things: a fan, then worse. Each has one answer.'],
+    ['The exterminator', 'At 100% suspicion he books one, three nights out. Ease off and he may cancel. If he comes, it is a workforce restructuring: the newest staff go, the raw blood goes, the pools shrink. Leadership is unaffected.'],
+    ['Acquisitions', 'Once the arm is running at capacity, the board will offer you the foot. It is expensive. It starts with nothing. It kicks.'],
+    ['Management', 'With two divisions, each gets a General Manager who runs it to policy while you are on the other floor. Tap the staff plate to change floors. Leadership seminars help GMs read his sleep. Scatter covers both.'],
+    ['The lease', 'Fourteen nights per host, then the annual report and a new address. The company keeps everything. The new host has never heard of us.'],
     ['Mornings', 'The colony keeps. Every night starts where the last one ended.'],
   ];
 
-  MA.config = { PALETTE, FEEL, ECON, PACE, BUILDINGS, BUILD_ORDER, NEST, ZONES, PADS, SITES, DIVISIONS, DIVISION_ORDER, DIVISION_BUILDINGS, POLICIES, SLEEPERS, HOST, FOUNDER, OPENING, NOTES, MORNING, FIRST, LAST, TRAITS, JOB_NAMES, MEMOS, RATINGS, RANKS, HANDBOOK, HANDBOOK_CORP };
+  MA.config = { PALETTE, FEEL, ECON, PACE, BUILDINGS, BUILD_ORDER, NEST, ZONES, PADS, SITES, DIVISIONS, DIVISION_ORDER, DIVISION_BUILDINGS, HAZARDS, POLICIES, SLEEPERS, HOST, FOUNDER, OPENING, NOTES, MORNING, FIRST, LAST, TRAITS, JOB_NAMES, MEMOS, RATINGS, RANKS, HANDBOOK, HANDBOOK_CORP };
   if (typeof module !== 'undefined') module.exports = MA;
 })(typeof window !== 'undefined' ? window : globalThis);

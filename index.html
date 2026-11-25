@@ -51,7 +51,7 @@
     <div class="hud-top" role="status" aria-label="Night status">
       <div class="plate" id="p-bank"><small>Stored</small><strong><span id="v-bank">0</span><i id="v-cap">/30</i></strong><span class="rbar" id="p-refined" hidden><i id="b-refined"></i></span><em id="v-rate" hidden></em></div>
       <div class="plate" id="p-clock"><small id="l-clock">Alarm in</small><strong id="v-clock">2:40</strong></div>
-      <div class="plate" id="p-staff" hidden><small>Staff</small><strong><span id="v-staff">0</span><i id="v-housing">/3</i></strong></div>
+      <div class="plate" id="p-staff" hidden><small id="l-staff">Staff</small><strong><span id="v-staff">0</span><i id="v-housing">/3</i></strong></div>
       <div class="plate" id="p-irr" hidden><small id="l-irr">Itch</small><div class="bar irr"><i id="b-irr"></i><u></u></div></div>
     </div>
     <div class="stage" id="stage"></div>
@@ -85,6 +85,12 @@
     </div>
   </div>
 
+  <div class="modal" id="annual" role="dialog" aria-modal="true" aria-labelledby="annual-h" hidden>
+    <div class="sheet"><div class="letterhead" aria-hidden="true"></div><p class="eyebrow" id="annual-eyebrow">Annual report</p><h2 id="annual-h">A record year</h2><p class="sticky" id="annual-note"></p>
+      <dl class="review-grid" id="annual-grid"></dl><p class="sub" id="annual-sub"></p>
+      <button class="btn-go" id="relocate" type="button">RELOCATE</button></div>
+  </div>
+
   <div class="modal" id="handbook" role="dialog" aria-modal="true" aria-labelledby="handbook-h" hidden>
     <div class="sheet"><h2 id="handbook-h">Employee handbook</h2><p class="sub">Handwritten by Rhonda on the back of a receipt. Please initial each section.</p><ol id="handbook-list"></ol><button class="btn-go" id="close-handbook" type="button">UNDERSTOOD</button></div>
   </div>
@@ -110,7 +116,9 @@
       </dl>
       <div class="payroll" id="r-payroll" hidden><h3>On payroll</h3><p id="r-staff-list"></p></div>
       <p class="clot" id="r-clot" hidden></p>
-      <p class="sus" id="r-sus" hidden></p>
+      <div class="divs" id="r-divs" hidden></div>
+      <div class="restructure" id="r-fum" hidden><h3>Workforce restructuring</h3><p id="r-fum-text"></p><p class="sticky" id="r-fum-note"></p></div>
+      <div class="susbox" id="r-susbox"><h3 id="r-sus-h">Suspicion</h3><ul id="r-sus-list"></ul><p class="sus" id="r-sus"></p></div>
       <div class="held" id="r-held"><h3>What held us back</h3><ul id="r-held-list"></ul></div>
       <div class="memoriam" id="r-memoriam" hidden><h3>In memoriam</h3><ul id="r-lost-list"></ul></div>
       <div class="plan"><h3>Tonight</h3><ul id="r-plan"></ul></div>
